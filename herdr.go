@@ -94,6 +94,9 @@ type agentInfo struct {
 	Focused     bool   `json:"focused"`
 	Cwd         string `json:"cwd"`
 	Title       string `json:"terminal_title_stripped"`
+	// Tokens are the pane's display values other plugins report (a PR badge,
+	// a profile…): what the sidebar's $name row tokens show.
+	Tokens map[string]string `json:"tokens"`
 	// StateChangeSeq moves on every status change. A scheduled recap compares
 	// it to what it saw when it was scheduled: if it moved, you've looked (done
 	// became idle) or the agent carried on, and the recap is no longer wanted.

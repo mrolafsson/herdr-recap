@@ -96,7 +96,9 @@ func TestTheViewShowsStatusTitleAndRecap(t *testing.T) {
 	v := ansi.Strip(m.View())
 	for _, want := range []string{
 		"Recap", "1 needs you", "1 done", "2 working", "2 idle",
-		"◉ Move billing webhooks to v2 events", "billing · 3m ago",
+		"◉ Move billing webhooks to v2 events", "billing · 2m ago",
+		"⎇ billing/webhooks-v2 · opus 5.5 · 182k ctx · acceptEdits · #412",
+		"⎇ settings-dark-mode · opus 5.5 · 1.2M ctx · auto", "codex · #415",
 		"● Flaky checkout e2e test", "✓ Release notes for 2.4",
 		"scratch", "Nothing to recap yet.", "Recaps are for Claude agents.",
 		"enter go to agent · r recap again · esc close",
@@ -364,5 +366,36 @@ func TestEscapesInTitlesNeverReachTheScreen(t *testing.T) {
 	e.agent.Title = "evil \x1b]52;c;aGk=\x07title \x1b[2J"
 	if v := m.View(); strings.Contains(v, "\x1b]") || strings.Contains(v, "\x1b[2J") {
 		t.Error("an escape sequence got through")
+	}
+}
+
+func TestOnlyTheSelectedAgentShowsYourLastPrompt(t *testing.T) {
+	m, _ := demoModel(t)
+	prompt := "› run the migration against staging when the tests pass"
+	if v := ansi.Strip(m.View()); !strings.Contains(v, prompt) {
+		t.Errorf("the selected agent's last prompt is missing:\n%s", v)
+	}
+	m.cursor = 1
+	if v := ansi.Strip(m.View()); strings.Contains(v, prompt) || !strings.Contains(v, "› the checkout e2e test fails") {
+		t.Errorf("the prompt didn't follow the selection:\n%s", v)
+	}
+	// The extra line counts toward the entry's height, so clicks still land.
+	selected := m.entryHeight(1)
+	m.cursor = 0
+	if selected != m.entryHeight(1)+1 {
+		t.Errorf("selected %d lines, unselected %d", selected, m.entryHeight(1))
+	}
+}
+
+func TestTokenValues(t *testing.T) {
+	tokens := map[string]string{"pr": "#1044", "pr_state": "open", "pr_checks": "passing", "clauth": "me", "empty": " "}
+	if got := strings.Join(tokenValues(tokens, nil), " "); got != "me #1044" {
+		t.Errorf("all: %q", got)
+	}
+	if got := strings.Join(tokenValues(tokens, []string{"pr_checks", "pr", "missing"}), " "); got != "passing #1044" {
+		t.Errorf("named: %q", got)
+	}
+	if got := tokenValues(map[string]string{"pr_state": "open"}, nil); len(got) != 1 {
+		t.Errorf("pr details without a pr are shown: %q", got)
 	}
 }

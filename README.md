@@ -7,7 +7,11 @@ before you pick one. Enter or a click goes to it.
 
 - **Live status** in herdr's sidebar glyphs and colours: `◉` needs you, a
   spinner while working, `●` done, `✓` idle. What needs you comes first.
-- **Titles** are the agents' own: Claude's title for the conversation.
+- **Titles** are the agents' own: Claude's title for the conversation,
+  bold, with when it was last active.
+- **Details** under each title: git branch, model, context size, permission
+  mode, and the pane's tokens (a PR badge from herdr-github, a profile…).
+  The selected agent also shows your last prompt to it.
 - **Recaps** are Claude Code's own `/recap`, the summary it shows when you
   come back to a session, for every session at once.
 - **Written while you're away**, so opening the popup is instant (see
@@ -101,6 +105,7 @@ Optional: `config.json` in the plugin's config directory
 | `claude` | the agent's own | The Claude Code binary to run recaps with. By default the one the agent runs, found on the agent's PATH (herdr's own PATH often lacks `~/.local/bin`) |
 | `timeout_seconds` | `120` | The longest one recap may take |
 | `theme` | ask the terminal | `"dark"` or `"light"` background |
+| `tokens` | all | Which pane tokens to show under a title, in order, e.g. `["pr", "clauth"]`. By default all, less herdr-github's `pr_*` details when its `pr` is there |
 
 ## Privacy
 

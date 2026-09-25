@@ -252,15 +252,16 @@ func TestUseThemeRecoloursTheStyles(t *testing.T) {
 		"hint": styleHintHot.GetForeground(), "err": styleErr.GetForeground(), "ok": styleOK.GetForeground(),
 		"blocked": styleBlocked.GetForeground(), "working": styleWorking.GetForeground(),
 		"done": styleDone.GetForeground(), "idle": styleIdle.GetForeground(), "selected": styleSelected.GetBackground(),
+		"title": styleTitle.GetForeground(), "recap": styleRecap.GetForeground(),
 	} {
 		want := map[string]string{"dim": p.Overlay0, "header": p.Text, "tab": p.Accent, "hint": p.Accent,
 			"err": p.Red, "ok": p.Green, "blocked": p.Red, "working": p.Peach, "done": p.Teal, "idle": p.Green,
-			"selected": p.SelectionBG}[name]
+			"selected": p.SelectionBG, "title": p.Text, "recap": p.Subtext0}[name]
 		if got != lipgloss.Color(want) {
 			t.Errorf("%s: %v, want %s", name, got, want)
 		}
 	}
-	if !styleHeader.GetBold() || !styleTabOn.GetUnderline() {
+	if !styleHeader.GetBold() || !styleTabOn.GetUnderline() || !styleTitle.GetBold() {
 		t.Error("recolouring dropped the styles' other attributes")
 	}
 	useTheme(nil)

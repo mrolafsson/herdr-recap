@@ -28,6 +28,9 @@ type claudeSession struct {
 	// Cwd is where the session was started: --resume looks sessions up by it.
 	Cwd        string
 	Transcript string // its .jsonl, "" when nothing has been said yet
+	// Meta is what the transcript says about the session (the popup reads
+	// it; recaps don't need it).
+	Meta sessionMeta
 }
 
 var errNotClaude = errors.New("no Claude process in this pane")

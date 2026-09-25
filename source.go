@@ -30,7 +30,13 @@ func (liveSource) agents() ([]agentInfo, []workspaceInfo, error) {
 	return agents, listWorkspaces(), nil
 }
 
-func (liveSource) session(paneID string) (claudeSession, error) { return resolveSession(paneID) }
+func (liveSource) session(paneID string) (claudeSession, error) {
+	s, err := resolveSession(paneID)
+	if err == nil {
+		s.Meta = readMeta(s.Transcript)
+	}
+	return s, err
+}
 
 func (liveSource) cached(s claudeSession) (*recap, bool) {
 	r := loadRecap(s.ID)

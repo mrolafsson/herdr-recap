@@ -353,6 +353,7 @@ func useTheme(p *palette) {
 	styleDim, styleHeader, styleTabOn, styleHintHot = defaultStyleDim, defaultStyleHeader, defaultStyleTabOn, defaultStyleHintHot
 	styleErr, styleOK, styleSelected = defaultStyleErr, defaultStyleOK, defaultStyleSelected
 	styleBlocked, styleWorking, styleDone, styleIdle = defaultStyleBlocked, defaultStyleWorking, defaultStyleDone, defaultStyleIdle
+	styleTitle, styleRecap = defaultStyleTitle, defaultStyleRecap
 	if p == nil {
 		return
 	}
@@ -372,6 +373,10 @@ func useTheme(p *palette) {
 	styleWorking = fg(styleWorking, p.Peach)
 	styleDone = fg(styleDone, p.Teal)
 	styleIdle = fg(styleIdle, p.Green)
+	// The title in the theme's brightest text, the recap a step below it,
+	// and the details under the title dimmer still (styleDim).
+	styleTitle = fg(styleTitle, p.Text)
+	styleRecap = fg(styleRecap, p.Subtext0)
 	if p.SelectionBG != "" {
 		styleSelected = styleSelected.Background(lipgloss.Color(p.SelectionBG))
 	}

@@ -72,6 +72,8 @@ var (
 	defaultStyleWorking  = lipgloss.NewStyle().Foreground(lipgloss.Color("#c78a1f"))
 	defaultStyleDone     = lipgloss.NewStyle().Foreground(lipgloss.Color("14"))
 	defaultStyleIdle     = lipgloss.NewStyle().Foreground(lipgloss.Color("10"))
+	defaultStyleTitle    = lipgloss.NewStyle().Bold(true)
+	defaultStyleRecap    = lipgloss.NewStyle()
 )
 
 var (
@@ -85,6 +87,8 @@ var (
 	styleWorking  = defaultStyleWorking
 	styleDone     = defaultStyleDone
 	styleIdle     = defaultStyleIdle
+	styleTitle    = defaultStyleTitle
+	styleRecap    = defaultStyleRecap
 )
 
 // statusRank orders the list: what needs you first, then what finished, then
@@ -116,11 +120,14 @@ type entry struct {
 	recapping   bool   // a recap is being written
 	triedRecap  bool   // one has been asked for since the popup opened
 	note        string // why there's no recap: not Claude, nothing said yet, an error
+	branch      string // the git branch in the agent's folder
+	branchAt    string // the folder and status change branch was read at
 }
 
 type model struct {
 	ctx        context.Context
 	src        source
+	tokens     []string // config.json's tokens: which to show, in order
 	width      int
 	height     int
 	entries    map[string]*entry
@@ -306,6 +313,11 @@ func (m *model) updateAgents(agents []agentInfo, workspaces []workspaceInfo) tea
 		}
 		kindChanged := e.agent.Agent != a.Agent
 		e.agent = a
+		// The branch can change with the folder or on any turn: read it again
+		// then (a few small files), not every second.
+		if at := a.Cwd + "\x00" + strconv.FormatInt(a.StateChangeSeq, 10); a.Cwd != "" && e.branchAt != at {
+			e.branch, e.branchAt = gitBranch(a.Cwd), at
+		}
 		if a.Agent != "claude" {
 			e.session, e.recap, e.note = nil, nil, "Recaps are for Claude agents."
 			continue
@@ -500,10 +512,10 @@ func (m model) body(e *entry) (lines []string, dim bool) {
 	return []string{""}, true
 }
 
-// entryHeight is an entry's lines on screen: title, body, and a blank after.
+// entryHeight is an entry's lines on screen, as viewEntry draws them. The
+// selected entry has one more: your last prompt.
 func (m model) entryHeight(i int) int {
-	lines, _ := m.body(m.entries[m.order[i]])
-	return 1 + len(lines) + 1
+	return len(m.viewEntry(m.entries[m.order[i]], i == m.cursor))
 }
 
 // visibleEntries is how many whole entries fit from the offset.
@@ -719,35 +731,45 @@ func title(a agentInfo) string {
 
 func (m model) viewEntry(e *entry, selected bool) []string {
 	w := m.width
-	var meta []string
+	var meta *sessionMeta
+	if e.session != nil {
+		meta = &e.session.Meta
+	}
+	// Right of the title: its space, and when it last did anything.
+	var right []string
 	if len(m.workspaces) > 1 {
 		for _, ws := range m.workspaces {
 			if ws.WorkspaceID == e.agent.WorkspaceID && ws.Label != "" {
-				meta = append(meta, shorten(ws.Label, 24))
+				right = append(right, shorten(ws.Label, 24))
 			}
 		}
 	}
-	switch {
-	case e.recapping && e.recap != nil:
-		meta = append(meta, "recapping…")
-	case e.recap != nil && !e.current:
-		meta = append(meta, "from "+ago(m.now(), e.recap.At))
-	case e.recap != nil:
-		meta = append(meta, ago(m.now(), e.recap.At))
+	if meta != nil && !meta.Active.IsZero() {
+		right = append(right, ago(m.now(), meta.Active))
 	}
 	left := " " + m.glyph(e.agent.Status) + " "
-	right := styleDim.Render(strings.Join(meta, " · "))
-	name := title(e.agent)
+	style := styleTitle
 	if e.agent.Status == "working" {
-		name = styleWorking.Render(shorten(name, max(1, w-lipgloss.Width(left)-lipgloss.Width(right)-2)))
+		style = styleWorking.Bold(true)
 	}
-	lines := []string{fitRow(left, name, right, w)}
+	rightText := styleDim.Render(strings.Join(right, " · "))
+	room := max(1, w-lipgloss.Width(left)-lipgloss.Width(rightText)-2)
+	lines := []string{fitRow(left, style.Render(shorten(title(e.agent), room)), rightText, w)}
+
+	if info := m.details(e, meta); len(info) > 0 {
+		lines = append(lines, "   "+styleDim.Render(shorten(strings.Join(info, " · "), max(1, w-4))))
+	}
 	body, dim := m.body(e)
 	for _, l := range body {
 		if dim {
 			l = styleDim.Render(l)
+		} else {
+			l = styleRecap.Render(l)
 		}
 		lines = append(lines, "   "+l)
+	}
+	if selected && meta != nil && meta.LastPrompt != "" {
+		lines = append(lines, "   "+styleDim.Italic(true).Render(shorten("› "+meta.LastPrompt, max(1, w-4))))
 	}
 	if selected {
 		for i, l := range lines {
@@ -755,6 +777,68 @@ func (m model) viewEntry(e *entry, selected bool) []string {
 		}
 	}
 	return append(lines, "")
+}
+
+// details is the line under a title: branch, model, context, mode, the
+// pane's tokens, and how current the recap is.
+func (m model) details(e *entry, meta *sessionMeta) []string {
+	var info []string
+	branch := e.branch
+	if meta != nil && meta.Branch != "" {
+		branch = meta.Branch
+	}
+	if branch != "" {
+		info = append(info, "⎇ "+shorten(branch, 40))
+	}
+	if e.agent.Agent != "claude" && e.agent.Agent != "" {
+		info = append(info, e.agent.Agent)
+	}
+	if meta != nil {
+		if meta.Model != "" {
+			info = append(info, shortModel(meta.Model))
+		}
+		if meta.Context > 0 {
+			info = append(info, shortTokens(meta.Context)+" ctx")
+		}
+		if meta.Mode != "" && meta.Mode != "default" {
+			info = append(info, meta.Mode)
+		}
+	}
+	info = append(info, tokenValues(e.agent.Tokens, m.tokens)...)
+	switch {
+	case e.recapping && e.recap != nil:
+		info = append(info, "recapping…")
+	case e.recap != nil && !e.current:
+		info = append(info, "recap from "+ago(m.now(), e.recap.At))
+	}
+	return info
+}
+
+// tokenValues are a pane's tokens to show, as values: the ones named in
+// config.json in that order, or else all of them by name, less herdr-github's
+// pr_* details when its pr is there (the pr says it).
+func tokenValues(tokens map[string]string, only []string) []string {
+	var names []string
+	if len(only) > 0 {
+		names = only
+	} else {
+		for k := range tokens {
+			if strings.HasPrefix(k, "pr_") && tokens["pr"] != "" {
+				continue
+			}
+			names = append(names, k)
+		}
+		sort.Strings(names)
+	}
+	var vals []string
+	seen := map[string]bool{}
+	for _, k := range names {
+		if v := strings.TrimSpace(tokens[k]); v != "" && !seen[v] {
+			seen[v] = true
+			vals = append(vals, shorten(v, 30))
+		}
+	}
+	return vals
 }
 
 // fitRow lays out left + title + right-aligned meta in exactly w cells,
@@ -815,7 +899,9 @@ func runPicker(ctx context.Context, cfg config, demo bool) error {
 	if demo {
 		src = newDemoSource()
 	}
-	program = tea.NewProgram(newModel(ctx, src), tea.WithAltScreen(), tea.WithMouseAllMotion())
+	m := newModel(ctx, src)
+	m.tokens = cfg.Tokens
+	program = tea.NewProgram(m, tea.WithAltScreen(), tea.WithMouseAllMotion())
 	_, err := program.Run()
 	if errors.Is(err, tea.ErrProgramKilled) {
 		return nil

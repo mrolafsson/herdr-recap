@@ -27,6 +27,8 @@ type demoAgent struct {
 	age     time.Duration
 	current bool
 	later   string // the recap written when it's out of date
+	meta    sessionMeta
+	active  time.Duration // when it last did anything, from the demo's start
 }
 
 var demoWorkspaces = []workspaceInfo{
@@ -37,32 +39,46 @@ var demoWorkspaces = []workspaceInfo{
 
 var demoAgents = []demoAgent{
 	{
-		agent:   agentInfo{PaneID: "w2:p1", WorkspaceID: "w2", Agent: "claude", Status: "blocked", Title: "Move billing webhooks to v2 events", StateChangeSeq: 4},
+		agent: agentInfo{PaneID: "w2:p1", WorkspaceID: "w2", Agent: "claude", Status: "blocked", Title: "Move billing webhooks to v2 events", StateChangeSeq: 4,
+			Tokens: map[string]string{"pr": "#412", "pr_checks": "passing"}},
 		session: "0b3c9a51-5d7e-4f7a-9c35-1a2b3c4d5e01", age: 3 * time.Minute, current: true,
-		recap: "Moving the billing webhooks to v2 events: handlers and tests are done. Waiting on you to approve running the migration against staging.",
+		meta: sessionMeta{Branch: "billing/webhooks-v2", Model: "claude-opus-5-5", Context: 182_000, Mode: "acceptEdits",
+			LastPrompt: "run the migration against staging when the tests pass"},
+		active: -2 * time.Minute,
+		recap:  "Moving the billing webhooks to v2 events: handlers and tests are done. Waiting on you to approve running the migration against staging.",
 	},
 	{
 		agent:   agentInfo{PaneID: "w1:p3", WorkspaceID: "w1", Agent: "claude", Status: "done", Title: "Flaky checkout e2e test", StateChangeSeq: 9},
 		session: "0b3c9a51-5d7e-4f7a-9c35-1a2b3c4d5e02", age: 12 * time.Minute, current: true,
-		recap: "Fixed the flaky checkout test: it raced the cart animation, now it waits for the total. Next, push the branch and open the PR.",
+		meta: sessionMeta{Branch: "fix/checkout-flake", Model: "claude-sonnet-5", Context: 64_000,
+			LastPrompt: "the checkout e2e test fails about one run in five, find out why"},
+		active: -12 * time.Minute,
+		recap:  "Fixed the flaky checkout test: it raced the cart animation, now it waits for the total. Next, push the branch and open the PR.",
 	},
 	{
 		agent:   agentInfo{PaneID: "w1:p1", WorkspaceID: "w1", Agent: "claude", Status: "working", Title: "Dark mode for the settings page", StateChangeSeq: 12},
 		session: "0b3c9a51-5d7e-4f7a-9c35-1a2b3c4d5e03", age: 41 * time.Minute,
-		recap: "Adding dark mode to settings: colour tokens are in, the form fields are next.",
-		later: "Adding dark mode to settings: tokens and form fields are done, and it's now fixing contrast in the billing table. Next, screenshots for review.",
+		meta: sessionMeta{Branch: "settings-dark-mode", Model: "claude-opus-5-5", Context: 1_240_000, Mode: "auto",
+			LastPrompt: "dark mode for the whole settings page, match the design file"},
+		active: 0,
+		recap:  "Adding dark mode to settings: colour tokens are in, the form fields are next.",
+		later:  "Adding dark mode to settings: tokens and form fields are done, and it's now fixing contrast in the billing table. Next, screenshots for review.",
 	},
 	{
 		agent:   agentInfo{PaneID: "w3:p2", WorkspaceID: "w3", Agent: "claude", Status: "idle", Title: "Release notes for 2.4", StateChangeSeq: 3},
 		session: "0b3c9a51-5d7e-4f7a-9c35-1a2b3c4d5e04", age: 2 * time.Hour, current: true,
-		recap: "Drafted the 2.4 release notes from the merged PRs and grouped them by area. Next, check the upgrade section with the platform team.",
+		meta: sessionMeta{Branch: "main", Model: "claude-haiku-4-5-20251001", Context: 23_000,
+			LastPrompt: "draft release notes for 2.4 from the merged PRs"},
+		active: -2 * time.Hour,
+		recap:  "Drafted the 2.4 release notes from the merged PRs and grouped them by area. Next, check the upgrade section with the platform team.",
 	},
 	{
 		agent:   agentInfo{PaneID: "w3:p4", WorkspaceID: "w3", Agent: "claude", Status: "idle", Title: "", Name: "scratch", StateChangeSeq: 1},
 		session: "0b3c9a51-5d7e-4f7a-9c35-1a2b3c4d5e05",
 	},
 	{
-		agent: agentInfo{PaneID: "w2:p3", WorkspaceID: "w2", Agent: "codex", Status: "working", Title: "Rate limiter for the public API", StateChangeSeq: 7},
+		agent: agentInfo{PaneID: "w2:p3", WorkspaceID: "w2", Agent: "codex", Status: "working", Title: "Rate limiter for the public API", StateChangeSeq: 7,
+			Tokens: map[string]string{"pr": "#415"}},
 	},
 }
 
@@ -99,7 +115,10 @@ func (d *demoSource) session(paneID string) (claudeSession, error) {
 	if a == nil || a.session == "" {
 		return claudeSession{}, errNotClaude
 	}
-	s := claudeSession{ID: a.session, Cwd: "/demo"}
+	s := claudeSession{ID: a.session, Cwd: "/demo", Meta: a.meta}
+	if s.Meta.Model != "" {
+		s.Meta.Active = d.started.Add(a.active)
+	}
 	if a.recap != "" {
 		s.Transcript = "/demo/" + a.session + ".jsonl"
 	}

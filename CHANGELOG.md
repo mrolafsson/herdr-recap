@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+- A details line under each agent: git branch, model, context size,
+  permission mode and the pane's tokens (`tokens` in config.json picks
+  which). The selected agent also shows your last prompt to it.
+- Titles are bold in the theme's brightest text, recaps a step below, the
+  details dimmer still. The right side says when the agent was last active.
+- Recaps run the agent's own `claude`, found on the agent's PATH: herdr's
+  server often has a bare PATH without `~/.local/bin`.
+
 ## 0.1.0 — 2026-09-25
 
 - First release. A popup with every agent in herdr: its status, in the

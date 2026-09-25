@@ -21,6 +21,9 @@ type config struct {
 	TimeoutSeconds int `json:"timeout_seconds"`
 	// Theme: "dark", "light", or empty to ask the terminal.
 	Theme string `json:"theme"`
+	// Tokens names the pane tokens to show under a title, in order. Empty =
+	// all of them, less the pr_* details when there's a pr.
+	Tokens []string `json:"tokens"`
 }
 
 func pluginID() string {
