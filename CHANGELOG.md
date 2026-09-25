@@ -9,7 +9,8 @@
   the selected row, with your last prompt.
 - Right of the title, how long the agent has been in its state (*waiting
   3m*, *done 25m*), and within a status what has waited longest is first.
-- `p` replies to the selected agent without leaving the popup.
+- `p` replies to the selected agent without leaving the popup. Replies can
+  run to several lines: `alt+enter` or `ctrl+j` for a new line, or paste.
 - `herdr-recap list` shows the metadata it reads, for checking.
 
 - A details line under each agent: git branch, model, context size,

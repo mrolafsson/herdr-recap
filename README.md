@@ -65,7 +65,7 @@ agents: no Claude calls, safe to screenshot.
 | `↑` `↓`, `k` `j`, `ctrl+p` `ctrl+n` | move |
 | `pgup` / `pgdn`, `g` / `G` | page, first / last |
 | `enter`, click | go to that agent and close |
-| `p` | reply to that agent: type, then `enter` to send (`esc` drops it). An agent waiting on a question or approval can't take one: go to it to answer |
+| `p` | reply to that agent: type, then `enter` to send (`esc` drops it). `alt+enter` or `ctrl+j` starts a new line, and pasted text keeps its lines. An agent waiting on a question or approval can't take one: go to it to answer |
 | `r`, `ctrl+r` | write that agent's recap again, now |
 | `esc`, `q` | close |
 

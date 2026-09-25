@@ -496,3 +496,37 @@ func TestChangesText(t *testing.T) {
 		}
 	}
 }
+
+func TestAReplyCanRunToSeveralLines(t *testing.T) {
+	d := newDemoSource()
+	d.delay = 0
+	src := &replySource{demoSource: d}
+	m := newModel(context.Background(), src)
+	m.width, m.height = 100, 30
+	m = settle(t, m, m.loadAgents())
+	m.cursor = 1
+	m = typeText(m, "p")
+	m = typeText(m, "looks good")
+	for _, nl := range []tea.KeyMsg{{Type: tea.KeyEnter, Alt: true}, {Type: tea.KeyCtrlJ}} {
+		next, _ := m.Update(nl)
+		m = next.(model)
+		m = typeText(m, "more")
+	}
+	next, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("\nand pasted"), Paste: true})
+	m = next.(model)
+	if got := m.replyText.Value(); got != "looks good\nmore\nmore\nand pasted" {
+		t.Fatalf("value %q", got)
+	}
+	v := ansi.Strip(m.View())
+	if lines := strings.Split(v, "\n"); len(lines) != m.height {
+		t.Errorf("%d lines for a %d-line popup: the list didn't make room for the reply\n%s", len(lines), m.height, v)
+	}
+	if !strings.Contains(v, "and pasted") || !strings.Contains(v, "looks good") {
+		t.Errorf("the reply box doesn't show every line:\n%s", v)
+	}
+	next, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	settle(t, next.(model), cmd)
+	if len(src.sent) != 1 || src.sent[0] != "w1:p3: looks good\nmore\nmore\nand pasted" {
+		t.Errorf("sent %q", src.sent)
+	}
+}

@@ -11,8 +11,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/spinner"
-	"github.com/charmbracelet/bubbles/textinput"
+	"github.com/charmbracelet/bubbles/textarea"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
@@ -62,6 +63,9 @@ type repliedMsg struct {
 
 // pollEvery is how often the open popup re-reads herdr's agents.
 const pollEvery = time.Second
+
+// maxReplyLines is as tall as the reply box grows before it scrolls.
+const maxReplyLines = 6
 
 // maxRecapping bounds how many recaps run at once: each is a claude process.
 const maxRecapping = 6
@@ -171,17 +175,24 @@ type model struct {
 	// A reply being typed to the selected agent (p), sent with agent.prompt.
 	replying  bool
 	replyTo   string // its pane
-	replyText textinput.Model
+	replyText textarea.Model
 }
 
 func newModel(ctx context.Context, src source) model {
 	sp := spinner.New()
 	sp.Spinner = spinner.MiniDot
 	sp.Style = lipgloss.NewStyle()
-	ti := textinput.New()
-	ti.Prompt = ""
+	ti := textarea.New()
+	ti.Prompt = "   "
 	ti.Placeholder = "yes, go ahead"
-	ti.CharLimit = 2000
+	ti.ShowLineNumbers = false
+	ti.CharLimit = 8000
+	ti.MaxHeight = maxReplyLines
+	// Enter sends; these start a new line. (Shift+Enter looks like Enter
+	// in most terminals.)
+	ti.KeyMap.InsertNewline = key.NewBinding(key.WithKeys("alt+enter", "ctrl+j"))
+	ti.FocusedStyle.CursorLine = lipgloss.NewStyle()
+	ti.SetHeight(1)
 	return model{
 		ctx: ctx, src: src, entries: map[string]*entry{}, spin: sp,
 		sem: make(chan struct{}, maxRecapping), now: time.Now, mouseX: -1, mouseY: -1, replyText: ti,
@@ -232,6 +243,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
+		m.fitReply()
 		m.scrollTo()
 		return m, nil
 
@@ -519,6 +531,7 @@ func (m model) startReply() (tea.Model, tea.Cmd) {
 	}
 	m.replying, m.replyTo, m.err = true, e.agent.PaneID, ""
 	m.replyText.SetValue("")
+	m.fitReply()
 	return m, m.replyText.Focus()
 }
 
@@ -544,7 +557,24 @@ func (m model) handleReplyKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 	var cmd tea.Cmd
 	m.replyText, cmd = m.replyText.Update(k)
+	m.fitReply()
+	m.scrollTo()
 	return m, cmd
+}
+
+// fitReply sizes the reply box to what's typed, up to maxReplyLines.
+func (m *model) fitReply() {
+	m.replyText.SetWidth(max(10, m.width-4))
+	m.replyText.SetHeight(min(maxReplyLines, max(1, m.replyText.LineCount())))
+}
+
+// replyLines is the room the reply takes below the list: its heading and
+// its box (0 when there's no reply being typed).
+func (m model) replyLines() int {
+	if !m.replying {
+		return 0
+	}
+	return 1 + m.replyText.Height()
 }
 
 // activate goes to the selected agent, closing the popup once herdr has.
@@ -590,7 +620,8 @@ const listTop = 2
 func (m model) listHeight() int {
 	// header + blank above; status line + footer below, the footer on the
 	// popup's last line (mouse.go counts on that).
-	return max(3, m.height-listTop-2)
+	// A reply being typed takes the status line and more.
+	return max(3, m.height-listTop-2-max(0, m.replyLines()-1))
 }
 
 // recapWidth is the room a recap line has: indented under the title.
@@ -1068,7 +1099,8 @@ func (m model) statusLine() string {
 		if e := m.entries[m.replyTo]; e != nil {
 			name = shorten(title(e.agent), 30)
 		}
-		return " " + styleTabOn.Render("Reply to "+name+":") + " " + m.replyText.View() + "\n"
+		return " " + styleTabOn.Render("Reply to "+name+":") + styleDim.Render("  alt+enter new line") + "\n" +
+			m.replyText.View() + "\n"
 	}
 	switch {
 	case m.err != "":
