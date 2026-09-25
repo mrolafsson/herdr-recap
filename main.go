@@ -43,12 +43,15 @@ func run(ctx context.Context, args []string) error {
 		fmt.Print(usage)
 		return nil
 	}
+	// A broken config.json mustn't quietly stop the recaps: say so (a toast
+	// from an action, the plugin log from a hook) and carry on with the
+	// defaults, which loadConfig returns with the error.
 	cfg, err := loadConfig()
 	if err != nil {
+		fmt.Fprintln(os.Stderr, "herdr-recap: using the defaults:", err)
 		if args[0] == "action" {
-			notify("Recap", err.Error())
+			notify("Recap", "Using the defaults: "+err.Error())
 		}
-		return err
 	}
 
 	switch args[0] {

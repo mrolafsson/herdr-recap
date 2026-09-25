@@ -21,7 +21,7 @@ func TestReadMetaTakesTheLatestOfEach(t *testing.T) {
 		`not json`,
 	}, "\n")+"\n")
 	m := readMeta(path)
-	if m.Branch != "feature/x" || m.Model != "claude-opus-5-5" || m.Context != 152010 || m.Mode != "auto" || m.LastPrompt != "fix the login bug" {
+	if m.Branch != "feature/x" || m.Model != "claude-opus-5-5" || m.Mode != "auto" || m.LastPrompt != "fix the login bug" {
 		t.Errorf("%+v", m)
 	}
 	if want := time.Date(2026, 9, 25, 8, 1, 0, 0, time.UTC); !m.Active.Equal(want) {

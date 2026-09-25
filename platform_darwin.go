@@ -20,7 +20,7 @@ func readProcessEnv(pid int) (map[string]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	return envFromPS(string(out), "CLAUDE_CONFIG_DIR"), nil
+	return envFromPS(string(out), "CLAUDE_CONFIG_DIR", "PATH"), nil
 }
 
 func envFromPS(line string, names ...string) map[string]string {

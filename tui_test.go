@@ -530,3 +530,62 @@ func TestAReplyCanRunToSeveralLines(t *testing.T) {
 		t.Errorf("sent %q", src.sent)
 	}
 }
+
+func TestEntryHeightMatchesWhatIsDrawn(t *testing.T) {
+	m, _ := demoModel(t)
+	check := func(when string) {
+		t.Helper()
+		for i, p := range m.order {
+			for _, cursor := range []int{i, (i + 1) % len(m.order)} {
+				m.cursor = cursor
+				if got, want := m.entryHeight(i), len(m.viewEntry(m.entries[p], cursor == i)); got != want {
+					t.Errorf("%s: %s (selected %v): counted %d lines, drew %d", when, p, cursor == i, got, want)
+				}
+			}
+		}
+	}
+	check("settled")
+	// Mid-recap and out of date, with and without the reply line open.
+	for _, e := range m.entries {
+		e.recapping, e.current = true, false
+	}
+	check("recapping")
+}
+
+func TestARecapFinishingAfterTheConversationMovedOnIsNotCurrent(t *testing.T) {
+	d := newDemoSource()
+	d.delay = 0
+	m := newModel(context.Background(), d)
+	m.width, m.height = 100, 40
+	m = settle(t, m, m.loadAgents())
+	e := m.entries["w1:p3"]
+	s := *e.session
+	// A recap is running when the agent's status changes.
+	e.recapping = true
+	next, cmd := m.Update(sessionMsg{pane: "w1:p3", seq: e.agent.StateChangeSeq, session: s, cached: e.recap, current: false})
+	m = next.(model)
+	if cmd != nil || !m.entries["w1:p3"].again {
+		t.Fatal("the change wasn't kept for after the running recap")
+	}
+	// The running recap lands: not current, and another is asked for.
+	next, cmd = m.Update(recapMsg{pane: "w1:p3", session: s.ID, recap: recap{Session: s.ID, Text: "old", At: time.Now()}})
+	m = next.(model)
+	if e := m.entries["w1:p3"]; e.current || cmd == nil || !e.recapping {
+		t.Errorf("current %v, recapping %v, another asked for %v", e.current, e.recapping, cmd != nil)
+	}
+}
+
+func TestTheMouseLeavesAReplyAlone(t *testing.T) {
+	m, src := focusModel(t)
+	m = typeText(m, "r")
+	m = typeText(m, "half a thought")
+	next, cmd := m.Update(tea.MouseMsg{X: 10, Y: listTop + 1, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft})
+	m = next.(model)
+	if cmd != nil || len(src.focused) != 0 || !m.replying || m.replyText.Value() != "half a thought" {
+		t.Error("a click in the list left the reply")
+	}
+	next, _ = m.Update(tea.MouseMsg{X: 10, Y: listTop + 12, Action: tea.MouseActionMotion})
+	if next.(model).cursor != m.cursor {
+		t.Error("hovering moved the selection away from the agent being replied to")
+	}
+}

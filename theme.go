@@ -365,7 +365,7 @@ func brightenTitle(dark bool) {
 // the ones herdr's sidebar gives each status.
 func useTheme(p *palette) {
 	theme = p
-	styleDim, styleHeader, styleTabOn, styleHintHot = defaultStyleDim, defaultStyleHeader, defaultStyleTabOn, defaultStyleHintHot
+	styleDim, styleTabOn, styleHintHot = defaultStyleDim, defaultStyleTabOn, defaultStyleHintHot
 	styleErr, styleOK, styleSelected = defaultStyleErr, defaultStyleOK, defaultStyleSelected
 	styleBlocked, styleWorking, styleDone, styleIdle = defaultStyleBlocked, defaultStyleWorking, defaultStyleDone, defaultStyleIdle
 	styleTitle, styleRecap = defaultStyleTitle, defaultStyleRecap
@@ -380,7 +380,6 @@ func useTheme(p *palette) {
 		return s.Foreground(lipgloss.Color(c))
 	}
 	styleDim = fg(styleDim, p.Overlay0)
-	styleHeader = fg(styleHeader, p.Text)
 	styleTabOn = fg(styleTabOn, p.Accent)
 	styleHintHot = fg(styleHintHot, p.Accent)
 	styleErr = fg(styleErr, p.Red)

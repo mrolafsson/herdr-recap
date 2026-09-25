@@ -73,9 +73,11 @@ func keyMsg(k string) tea.KeyMsg {
 func (m model) handleMouse(ev tea.MouseMsg) (tea.Model, tea.Cmd) {
 	m.mouseX, m.mouseY = ev.X, ev.Y
 	if ev.Action == tea.MouseActionMotion {
-		// Hover highlights, like a launcher: the click then opens what you see.
-		if i, ok := m.entryAt(ev.Y); ok {
+		// Hover highlights, like a launcher: the click then opens what you
+		// see. Not while replying: the reply is to the selected agent.
+		if i, ok := m.entryAt(ev.Y); ok && !m.replying && i != m.cursor {
 			m.cursor = i
+			m.scrollTo() // selected, it grows: keep it all on screen
 		}
 		return m, nil
 	}
@@ -83,11 +85,14 @@ func (m model) handleMouse(ev tea.MouseMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	switch ev.Button {
-	case tea.MouseButtonWheelUp:
-		m.move(-1)
-		return m, nil
-	case tea.MouseButtonWheelDown:
-		m.move(1)
+	case tea.MouseButtonWheelUp, tea.MouseButtonWheelDown:
+		if !m.replying {
+			if ev.Button == tea.MouseButtonWheelUp {
+				m.move(-1)
+			} else {
+				m.move(1)
+			}
+		}
 		return m, nil
 	case tea.MouseButtonLeft:
 	default:
@@ -99,7 +104,8 @@ func (m model) handleMouse(ev tea.MouseMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	}
-	if i, ok := m.entryAt(ev.Y); ok {
+	// A click in the list while replying would leave, losing the reply.
+	if i, ok := m.entryAt(ev.Y); ok && !m.replying {
 		m.cursor, m.flash = i, ""
 		return m.activate()
 	}

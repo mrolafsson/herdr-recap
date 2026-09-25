@@ -80,7 +80,6 @@ const recapLines = 3
 // the styles from herdr's theme. The status colours are herdr's sidebar's.
 var (
 	defaultStyleDim      = lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "245", Dark: "243"})
-	defaultStyleHeader   = lipgloss.NewStyle().Bold(true)
 	defaultStyleTabOn    = lipgloss.NewStyle().Bold(true).Underline(true)
 	defaultStyleSelected = lipgloss.NewStyle().Background(lipgloss.AdaptiveColor{Light: "254", Dark: "237"})
 	defaultStyleErr      = lipgloss.NewStyle().Foreground(lipgloss.Color("#eb5757"))
@@ -100,7 +99,6 @@ var (
 
 var (
 	styleDim      = defaultStyleDim
-	styleHeader   = defaultStyleHeader
 	styleTabOn    = defaultStyleTabOn
 	styleSelected = defaultStyleSelected
 	styleErr      = defaultStyleErr
@@ -146,6 +144,7 @@ type entry struct {
 	resolving   bool   // looking up the session
 	recapping   bool   // a recap is being written
 	triedRecap  bool   // one has been asked for since the popup opened
+	again       bool   // the conversation moved on during a recap: write another after it
 	note        string // why there's no recap: not Claude, nothing said yet, an error
 	branch      string // the git branch in the agent's folder
 	branchAt    string // the folder and status change branch was read at
@@ -303,8 +302,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		// An out-of-date recap is rewritten, but only once for an agent
-		// that's working: it'd be out of date again straight away.
-		if !e.current && !e.recapping && (e.agent.Status != "working" || !e.triedRecap) {
+		// that's working: it'd be out of date again straight away. One
+		// already running describes the conversation as it was: another
+		// follows it.
+		if !e.current && (e.agent.Status != "working" || !e.triedRecap) {
+			if e.recapping {
+				e.again = true
+				return m, nil
+			}
 			return m, m.startRecap(e, false)
 		}
 		return m, nil
@@ -315,18 +320,23 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		e.recapping = false
-		if e.session == nil || e.session.ID != msg.session {
-			return m, nil
+		again := e.again
+		e.again = false
+		if e.session != nil && e.session.ID == msg.session {
+			switch {
+			case errors.Is(msg.err, errNothingYet):
+				e.note = "Nothing to recap yet."
+			case errors.Is(msg.err, context.Canceled):
+			case msg.err != nil:
+				e.note = "Couldn't recap: " + msg.err.Error()
+			default:
+				r := msg.recap
+				// Current only if the conversation didn't move on meanwhile.
+				e.recap, e.current, e.note = &r, !again, ""
+			}
 		}
-		switch {
-		case errors.Is(msg.err, errNothingYet):
-			e.note = "Nothing to recap yet."
-		case errors.Is(msg.err, context.Canceled):
-		case msg.err != nil:
-			e.note = "Couldn't recap: " + msg.err.Error()
-		default:
-			r := msg.recap
-			e.recap, e.current, e.note = &r, true, ""
+		if again && e.session != nil && e.session.Transcript != "" {
+			return m, m.startRecap(e, false)
 		}
 		return m, nil
 
@@ -653,11 +663,43 @@ func (m model) body(e *entry) (lines []string, dim bool) {
 	return []string{""}, true
 }
 
-// entryHeight is an entry's lines on screen, as viewEntry draws them. The
-// selected entry has one more: your last prompt.
+// entryHeight is an entry's lines on screen, as viewEntry draws them,
+// counted without drawing: scrolling and the mouse ask for it a lot. (A
+// test holds the two to each other.)
 func (m model) entryHeight(i int) int {
-	return len(m.viewEntry(m.entries[m.order[i]], i == m.cursor))
+	e := m.entries[m.order[i]]
+	selected := i == m.cursor
+	var meta *sessionMeta
+	if e.session != nil {
+		meta = &e.session.Meta
+	}
+	body, _ := m.body(e)
+	n := 1 + len(body) + 1 // title, recap, a blank after
+	if m.hasDetails(e, meta) {
+		n++
+	}
+	if selected && meta != nil && (meta.Model != "" || unusualMode(meta.Mode)) {
+		n++
+	}
+	if e.agent.Status == "blocked" && meta != nil && meta.Pending != "" {
+		n++
+	}
+	if selected && meta != nil && meta.LastPrompt != "" {
+		n++
+	}
+	return n
 }
+
+// hasDetails is whether details has anything to say, cheaply.
+func (m model) hasDetails(e *entry, meta *sessionMeta) bool {
+	return e.branch != "" || (meta != nil && (meta.Branch != "" || meta.TasksTotal > 0)) ||
+		!e.changes.empty() || (e.agent.Agent != "claude" && e.agent.Agent != "") ||
+		len(tokenValues(e.agent.Tokens, m.tokens)) > 0 ||
+		(e.recap != nil && (e.recapping || !e.current))
+}
+
+// unusualMode is a permission mode worth saying: anything but the default.
+func unusualMode(mode string) bool { return mode != "" && mode != "default" }
 
 // visibleEntries is how many whole entries fit from the offset.
 func (m model) visibleEntries() int {
@@ -750,18 +792,12 @@ func shorten(s string, n int) string {
 	return strings.TrimRight(ansi.Truncate(s, n-1, ""), " ") + "…"
 }
 
-// ago is how long ago t was, briefly: "just now", "4m", "2h", "3d".
+// ago is how long ago t was, briefly: "just now", "4m ago", "2h ago".
 func ago(now, t time.Time) string {
-	d := now.Sub(t)
-	switch {
-	case d < time.Minute:
-		return "just now"
-	case d < time.Hour:
-		return fmt.Sprintf("%dm ago", int(d.Minutes()))
-	case d < 48*time.Hour:
-		return fmt.Sprintf("%dh ago", int(d.Hours()))
+	if d := now.Sub(t); d >= time.Minute {
+		return duration(d) + " ago"
 	}
-	return fmt.Sprintf("%dd ago", int(d.Hours()/24))
+	return "just now"
 }
 
 // ── view ──────────────────────────────────────────────────────────────────────
@@ -906,7 +942,7 @@ func (m model) viewEntry(e *entry, selected bool) []string {
 		if meta.Model != "" {
 			about = append(about, styleModel.Render(shortModel(meta.Model)))
 		}
-		if meta.Mode != "" && meta.Mode != "default" {
+		if unusualMode(meta.Mode) {
 			about = append(about, styleMode.Render(meta.Mode))
 		}
 		if len(about) > 0 {
@@ -944,8 +980,10 @@ func (m model) viewEntry(e *entry, selected bool) []string {
 // current the recap is. Model, context and mode are the selected row's.
 func (m model) details(e *entry, meta *sessionMeta) []string {
 	var info []string
+	// The folder's branch, read at the last status change, is the live one;
+	// the transcript's is what it was at its last message.
 	branch := e.branch
-	if meta != nil && meta.Branch != "" {
+	if branch == "" && meta != nil {
 		branch = meta.Branch
 	}
 	if branch != "" {
@@ -1126,9 +1164,6 @@ func (m model) footer() []hint {
 	return []hint{{"enter go to agent", "enter"}, {"r reply", "r"}, {"^r recap again", "ctrl+r"}, {"esc close", "esc"}}
 }
 
-// program is the running popup.
-var program *tea.Program
-
 func runPicker(ctx context.Context, cfg config, demo bool) error {
 	// Ask the terminal for its background now: once the program owns stdin,
 	// the reply would arrive as stray input.
@@ -1146,8 +1181,7 @@ func runPicker(ctx context.Context, cfg config, demo bool) error {
 	}
 	m := newModel(ctx, src)
 	m.tokens = cfg.Tokens
-	program = tea.NewProgram(m, tea.WithAltScreen(), tea.WithMouseAllMotion())
-	_, err := program.Run()
+	_, err := tea.NewProgram(m, tea.WithAltScreen(), tea.WithMouseAllMotion()).Run()
 	if errors.Is(err, tea.ErrProgramKilled) {
 		return nil
 	}
@@ -1173,10 +1207,10 @@ func debugList(cfg config) error {
 			continue
 		}
 		fmt.Printf("    session %s  config %s\n    transcript %s\n", s.ID, s.ConfigDir, s.Transcript)
-		mt := readMeta(s.Transcript)
+		mt := s.Meta
 		c := readChanges(a.Cwd)
-		fmt.Printf("    branch %q  model %s  ctx %d  mode %q  tasks %d/%d  changes %+v\n",
-			mt.Branch, mt.Model, mt.Context, mt.Mode, mt.TasksDone, mt.TasksTotal, c)
+		fmt.Printf("    branch %q (folder %q)  model %s  mode %q  tasks %d/%d  changes %+v\n",
+			mt.Branch, gitBranch(a.Cwd), mt.Model, mt.Mode, mt.TasksDone, mt.TasksTotal, c)
 		fmt.Printf("    active %s  prompted %s  pending %q\n    last prompt %q\n",
 			mt.Active.Format(time.RFC3339), mt.PromptAt.Format(time.RFC3339), mt.Pending, shorten(mt.LastPrompt, 80))
 		if r, current := src.cached(s); r != nil {

@@ -25,6 +25,9 @@ type claudeSession struct {
 	// server often has a bare PATH (no ~/.local/bin), so "claude" alone
 	// isn't found from a hook or the popup.
 	Binary string
+	// Path is the agent's PATH: the recap runs with it, so claude and what
+	// it needs (node, for an npm install) are found as they were for the agent.
+	Path string
 	// Cwd is where the session was started: --resume looks sessions up by it.
 	Cwd        string
 	Transcript string // its .jsonl, "" when nothing has been said yet
@@ -98,7 +101,7 @@ func sessionForPID(pid int, argv0 string) (claudeSession, error) {
 	if err != nil {
 		return claudeSession{}, fmt.Errorf("reading claude's environment: %w", err)
 	}
-	s := claudeSession{Binary: agentBinary(argv0, env)}
+	s := claudeSession{Binary: agentBinary(argv0, env), Path: env["PATH"]}
 	if dir, ok := env["CLAUDE_CONFIG_DIR"]; ok && dir != "" {
 		s.ConfigDir, s.ConfigDirSet = dir, true
 	} else {

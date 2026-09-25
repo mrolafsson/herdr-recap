@@ -17,7 +17,6 @@ import (
 type sessionMeta struct {
 	Branch     string    // the git branch it's working on
 	Model      string    // e.g. claude-opus-5-5
-	Context    int       // tokens in its context at the last reply
 	Mode       string    // permission mode: default, plan, auto, acceptEdits…
 	LastPrompt string    // what you last asked it
 	Active     time.Time // its last message, either way
@@ -87,11 +86,6 @@ func readMeta(path string) sessionMeta {
 			Message    struct {
 				Model   string          `json:"model"`
 				Content json.RawMessage `json:"content"`
-				Usage   struct {
-					Input       int `json:"input_tokens"`
-					CacheRead   int `json:"cache_read_input_tokens"`
-					CacheCreate int `json:"cache_creation_input_tokens"`
-				} `json:"usage"`
 			} `json:"message"`
 		}
 		if json.Unmarshal(line, &r) != nil {
@@ -108,9 +102,6 @@ func readMeta(path string) sessionMeta {
 		case "assistant":
 			if r.Message.Model != "" && !strings.HasPrefix(r.Message.Model, "<") {
 				m.Model = r.Message.Model
-			}
-			if n := r.Message.Usage.Input + r.Message.Usage.CacheRead + r.Message.Usage.CacheCreate; n > 0 {
-				m.Context = n
 			}
 			for _, b := range blocks {
 				if b.Type == "tool_use" {
@@ -242,14 +233,10 @@ func (t taskCount) total() int {
 	if t.usesTodo {
 		return len(t.todos)
 	}
-	n := t.created
-	for _, s := range t.statuses {
-		if s == "deleted" {
-			n--
-		}
-	}
-	// Updates to tasks created before the part of the transcript read.
-	return max(n, len(t.statuses)-t.deletedCount())
+	deleted := t.deletedCount()
+	// At least the tasks updated: some may have been created before the
+	// part of the transcript read.
+	return max(t.created-deleted, len(t.statuses)-deleted)
 }
 
 func (t taskCount) deletedCount() int {

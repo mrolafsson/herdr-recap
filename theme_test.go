@@ -248,7 +248,7 @@ func TestUseThemeRecoloursTheStyles(t *testing.T) {
 	p := pal("dracula")
 	useTheme(p)
 	for name, got := range map[string]lipgloss.TerminalColor{
-		"dim": styleDim.GetForeground(), "header": styleHeader.GetForeground(), "tab": styleTabOn.GetForeground(),
+		"dim": styleDim.GetForeground(), "tab": styleTabOn.GetForeground(),
 		"hint": styleHintHot.GetForeground(), "err": styleErr.GetForeground(), "ok": styleOK.GetForeground(),
 		"blocked": styleBlocked.GetForeground(), "working": styleWorking.GetForeground(),
 		"done": styleDone.GetForeground(), "idle": styleIdle.GetForeground(), "selected": styleSelected.GetBackground(),
@@ -256,7 +256,7 @@ func TestUseThemeRecoloursTheStyles(t *testing.T) {
 		"branch": styleBranch.GetForeground(), "model": styleModel.GetForeground(), "tasks": styleTasks.GetForeground(),
 		"mode": styleMode.GetForeground(), "token": styleToken.GetForeground(),
 	} {
-		want := map[string]string{"dim": p.Overlay0, "header": p.Text, "tab": p.Accent, "hint": p.Accent,
+		want := map[string]string{"dim": p.Overlay0, "tab": p.Accent, "hint": p.Accent,
 			"err": p.Red, "ok": p.Green, "blocked": p.Red, "working": p.Peach, "done": p.Teal, "idle": p.Green,
 			"selected": p.SelectionBG, "title": p.Text, "recap": p.Subtext0,
 			"branch": p.Mauve, "model": p.Blue, "tasks": p.Teal, "mode": p.Yellow, "token": p.Green}[name]
@@ -264,7 +264,7 @@ func TestUseThemeRecoloursTheStyles(t *testing.T) {
 			t.Errorf("%s: %v, want %s", name, got, want)
 		}
 	}
-	if !styleHeader.GetBold() || !styleTabOn.GetUnderline() || !styleTitle.GetBold() {
+	if !styleTabOn.GetUnderline() || !styleTitle.GetBold() {
 		t.Error("recolouring dropped the styles' other attributes")
 	}
 	useTheme(nil)
@@ -280,7 +280,7 @@ func TestResetIsTheTerminalsColour(t *testing.T) {
 	p := pal("dracula")
 	p.Red, p.Text, p.SelectionBG = "", "", ""
 	useTheme(p)
-	if styleErr.GetForeground() != (lipgloss.NoColor{}) || styleHeader.GetForeground() != (lipgloss.NoColor{}) ||
+	if styleErr.GetForeground() != (lipgloss.NoColor{}) || styleTitle.GetForeground() != (lipgloss.NoColor{}) ||
 		styleBlocked.GetForeground() != (lipgloss.NoColor{}) {
 		t.Error("a Reset foreground kept a colour")
 	}

@@ -142,7 +142,8 @@ func TestTheRecapIsntTiedToHerdr(t *testing.T) {
 	t.Setenv("HERDR_PANE_ID", "w1:p9")
 	t.Setenv("HERDR_ENV", "1")
 	t.Setenv("CLAUDE_CONFIG_DIR", "/plugins/own")
-	env := recapEnv(claudeSession{ConfigDir: "/profiles/me", ConfigDirSet: true})
+	t.Setenv("PATH", "/usr/bin:/bin")
+	env := recapEnv(claudeSession{ConfigDir: "/profiles/me", ConfigDirSet: true, Path: "/home/me/.local/bin:/usr/bin"})
 	for _, kv := range env {
 		if strings.HasPrefix(kv, "HERDR_") || kv == "CLAUDE_CONFIG_DIR=/plugins/own" {
 			t.Errorf("passed on %s", kv)
@@ -150,6 +151,9 @@ func TestTheRecapIsntTiedToHerdr(t *testing.T) {
 	}
 	if !slices.Contains(env, "CLAUDE_CONFIG_DIR=/profiles/me") {
 		t.Error("the agent's config dir wasn't passed on")
+	}
+	if !slices.Contains(env, "PATH=/home/me/.local/bin:/usr/bin") || slices.Contains(env, "PATH=/usr/bin:/bin") {
+		t.Error("the recap should run with the agent's PATH, not herdr's")
 	}
 	for _, kv := range recapEnv(claudeSession{ConfigDir: "/home/me/.claude"}) {
 		if strings.HasPrefix(kv, "CLAUDE_CONFIG_DIR=") {

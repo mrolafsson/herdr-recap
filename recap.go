@@ -140,17 +140,22 @@ func recapArgs(id string) []string {
 // recapEnv is the plugin's environment for the recap, less anything that
 // would tie it to herdr: with HERDR_* set, herdr's Claude hooks would report
 // the recap to herdr as an agent in the pane the plugin runs in. It gets the
-// agent's CLAUDE_CONFIG_DIR, so it finds the agent's sessions and account.
+// agent's CLAUDE_CONFIG_DIR, so it finds the agent's sessions and account,
+// and the agent's PATH, which herdr's own often isn't (no ~/.local/bin).
 func recapEnv(s claudeSession) []string {
 	var env []string
 	for _, kv := range os.Environ() {
-		if strings.HasPrefix(kv, "HERDR_") || strings.HasPrefix(kv, "CLAUDE_CONFIG_DIR=") {
+		if strings.HasPrefix(kv, "HERDR_") || strings.HasPrefix(kv, "CLAUDE_CONFIG_DIR=") ||
+			(s.Path != "" && strings.HasPrefix(kv, "PATH=")) {
 			continue
 		}
 		env = append(env, kv)
 	}
 	if s.ConfigDirSet {
 		env = append(env, "CLAUDE_CONFIG_DIR="+s.ConfigDir)
+	}
+	if s.Path != "" {
+		env = append(env, "PATH="+s.Path)
 	}
 	return env
 }
@@ -161,6 +166,9 @@ var runCommand = func(ctx context.Context, cfg config, s claudeSession) ([]byte,
 	defer cancel()
 	cmd := exec.CommandContext(ctx, claudeBinary(cfg, s), recapArgs(s.ID)...)
 	cmd.Dir, cmd.Env = s.Cwd, recapEnv(s)
+	// Past the timeout, don't wait on pipes a hook's child may still hold:
+	// the session's lock would be held with them.
+	cmd.WaitDelay = 5 * time.Second
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	out, err := cmd.Output()
