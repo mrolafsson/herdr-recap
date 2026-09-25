@@ -29,7 +29,7 @@ what to look at first.
 
 ## Scan the list
 
-Open it (`prefix+alt+p`) and read down. Each agent is a few lines:
+Open it (`prefix+alt+r`) and read down. Each agent is a few lines:
 
 - **Status first, what needs you at the top.** herdr's own glyphs and colours:
   `◉` needs you, `◔` working, `●` done, `✓` idle. Within a status, whatever
@@ -90,7 +90,7 @@ Bind it to a key in `~/.config/herdr/config.toml`:
 
 ```toml
 [[keys.command]]
-key = "prefix+alt+p"
+key = "prefix+alt+r"
 type = "plugin_action"
 command = "herdr-recap.open"
 ```
