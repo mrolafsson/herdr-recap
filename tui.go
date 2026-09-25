@@ -1175,13 +1175,21 @@ func runPicker(ctx context.Context, cfg config, demo bool) error {
 	}
 	useTheme(pickerTheme(cfg.Theme == "dark"))
 	brightenTitle(cfg.Theme == "dark")
+	if !demo {
+		defer notePopup()()
+	}
 	var src source = liveSource{cfg}
 	if demo {
 		src = newDemoSource()
 	}
 	m := newModel(ctx, src)
 	m.tokens = cfg.Tokens
-	_, err := tea.NewProgram(m, tea.WithAltScreen(), tea.WithMouseAllMotion()).Run()
+	// WithContext: a SIGTERM (a newer open replacing this popup) ends it
+	// cleanly, restoring the terminal.
+	_, err := tea.NewProgram(m, tea.WithAltScreen(), tea.WithMouseAllMotion(), tea.WithContext(ctx)).Run()
+	if errors.Is(err, context.Canceled) {
+		return nil
+	}
 	if errors.Is(err, tea.ErrProgramKilled) {
 		return nil
 	}

@@ -10,6 +10,9 @@ import (
 	"io"
 	"os"
 	"os/signal"
+	"path/filepath"
+	"strconv"
+	"strings"
 	"syscall"
 	"time"
 )
@@ -82,7 +85,19 @@ func runAction(name string) error {
 		if name == "demo" {
 			env["HERDR_RECAP_DEMO"] = "1"
 		}
-		if err := openPopup("picker", "80%", "75%", env); err != nil {
+		err := openPopup("picker", "80%", "75%", env)
+		if isHerdrCode(err, "ui_busy") {
+			// herdr shows one popup at a time, open while its command runs.
+			// If it's ours, left open (on another client, say, where you
+			// can't see it), end it and open it here; someone else's is
+			// theirs to close.
+			if !endOwnPopup() {
+				notify("Recap", "Another popup is open: close it (esc) and try again.")
+				return err
+			}
+			err = openPopup("picker", "80%", "75%", env)
+		}
+		if err != nil {
 			notify("Recap", "Couldn't open the popup: "+err.Error())
 			return err
 		}
@@ -120,4 +135,63 @@ func runRecapCommand(ctx context.Context, cfg config, args []string) error {
 	}
 	fmt.Println(r.Text)
 	return nil
+}
+
+// popupFile holds the running popup's process, so an open that finds one
+// already up can end it. A popup lasts as long as its command.
+func popupFile() string { return filepath.Join(stateDir(), "popup.pid") }
+
+// notePopup records this process as the popup, and returns a func that
+// forgets it again, unless a newer popup has replaced it.
+func notePopup() func() {
+	pid := strconv.Itoa(os.Getpid())
+	if os.MkdirAll(stateDir(), 0o700) != nil || os.WriteFile(popupFile(), []byte(pid), 0o600) != nil {
+		return func() {}
+	}
+	return func() {
+		if data, err := os.ReadFile(popupFile()); err == nil && strings.TrimSpace(string(data)) == pid {
+			os.Remove(popupFile())
+		}
+	}
+}
+
+// endOwnPopup ends this plugin's popup if one is running, and waits for it
+// to go: whether it was ours to end.
+func endOwnPopup() bool {
+	data, err := os.ReadFile(popupFile())
+	if err != nil {
+		return false
+	}
+	pid, err := strconv.Atoi(strings.TrimSpace(string(data)))
+	if err != nil || pid <= 1 || !isOwnPopup(pid) {
+		return false
+	}
+	p, err := os.FindProcess(pid)
+	if err != nil || p.Signal(syscall.SIGTERM) != nil {
+		return false
+	}
+	for range 20 {
+		if p.Signal(syscall.Signal(0)) != nil {
+			return true
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	return p.Signal(syscall.Signal(0)) != nil
+}
+
+// isOwnPopup checks the process is this program, not a stranger that was
+// given the pid after ours exited.
+func isOwnPopup(pid int) bool {
+	self, err := os.Executable()
+	if err != nil {
+		return false
+	}
+	exe, err := processExe(pid)
+	return err == nil && sameFile(exe, self)
+}
+
+func sameFile(a, b string) bool {
+	fa, errA := os.Stat(a)
+	fb, errB := os.Stat(b)
+	return errA == nil && errB == nil && os.SameFile(fa, fb)
 }

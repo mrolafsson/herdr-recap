@@ -20,3 +20,8 @@ func readProcessEnv(pid int) (map[string]string, error) {
 	}
 	return env, nil
 }
+
+// processExe is the program a process runs.
+func processExe(pid int) (string, error) {
+	return os.Readlink("/proc/" + strconv.Itoa(pid) + "/exe")
+}

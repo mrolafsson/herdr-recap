@@ -56,3 +56,12 @@ func nextIsVar(s string) bool {
 	}
 	return true
 }
+
+// processExe is the program a process runs, as ps names it: the path it was
+// started by, which for the popup is the absolute bin/ path herdr gave it.
+func processExe(pid int) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, "ps", "-o", "comm=", "-p", strconv.Itoa(pid)).Output()
+	return strings.TrimSpace(string(out)), err
+}

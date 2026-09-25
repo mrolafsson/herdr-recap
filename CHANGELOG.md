@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- Opening the popup while an earlier one is still up (left on another
+  client, where you can't see it) closes that one and opens it here,
+  instead of failing with *a popup pane is already open*. Another plugin's
+  popup is left alone, with a toast saying so.
+- The popup's size is in the manifest, so it's the same however it's opened.
+
 ## 0.1.0 — 2026-09-25
 
 - A popup with every agent in herdr, in the sidebar's status glyphs and

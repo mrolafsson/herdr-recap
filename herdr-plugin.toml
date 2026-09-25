@@ -34,6 +34,8 @@ command = ["./bin/herdr-recap", "action", "demo"]
 id = "picker"
 title = "Recap"
 placement = "popup"
+width = "80%"
+height = "75%"
 command = ["./bin/herdr-recap", "picker"]
 
 # Recaps are written ahead of time. When a Claude agent finishes a turn (done)

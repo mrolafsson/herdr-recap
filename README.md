@@ -191,8 +191,11 @@ stop, say) run for it too.
   background, with its cost, and any errors.
 - *The key does nothing*: herdr clients read key bindings when they start, and
   `reload-config` doesn't reach one that's already open. Start a new client.
-  With several attached (another terminal, a mosh session), close the ones
-  you don't use: a popup can open on whichever herdr counts as active.
+- *It opens somewhere else*: herdr shows one popup at a time, on whichever
+  client counts as active, so with several attached (another terminal, a
+  mosh session) it can open on one you're not looking at. Opening it again
+  closes that one and opens it where you are. If another plugin's popup is
+  in the way, a toast says so: close it first.
 - *It lists only some of my agents*: it shows the herdr it's installed in.
   Agents on another machine you've connected in herdr's sidebar need the
   plugin installed there, and appear in that machine's popup.
