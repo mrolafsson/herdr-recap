@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.1.1 — 2026-09-25
 
 - Opening the popup while an earlier one is still up (left on another
   client, where you can't see it) closes that one and opens it here,
