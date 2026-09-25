@@ -101,10 +101,10 @@ func TestTheViewShowsStatusTitleAndRecap(t *testing.T) {
 		"? Run npm run migrate -- --env staging",
 		"storefront · done 12m", "storefront · working 18m", "docs · idle 2h",
 		"⎇ settings-dark-mode · 14 files +530 −121 · 3/7 tasks", "⎇ main · ↑1", "codex · #415",
-		"opus 5.5 · 182k ctx · acceptEdits",
+		"opus 5.5 · acceptEdits",
 		"● Flaky checkout e2e test", "✓ Release notes for 2.4",
 		"scratch", "Nothing to recap yet.", "Recaps are for Claude agents.",
-		"enter go to agent · p reply · r recap again · esc close",
+		"enter go to agent · r reply · ^r recap again · esc close",
 	} {
 		if !strings.Contains(v, want) {
 			t.Errorf("view lacks %q:\n%s", want, v)
@@ -242,14 +242,14 @@ func (c *countingSource) recap(ctx context.Context, s claudeSession, force bool)
 	return c.demoSource.recap(ctx, s, force)
 }
 
-func TestRRecapsTheSelectedAgentAgain(t *testing.T) {
+func TestCtrlRRecapsTheSelectedAgentAgain(t *testing.T) {
 	d := newDemoSource()
 	d.delay = 0
 	src := &countingSource{demoSource: d}
 	m := newModel(context.Background(), src)
 	m.width, m.height = 100, 40
 	m = settle(t, m, m.loadAgents())
-	next, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("r")})
+	next, cmd := m.Update(tea.KeyMsg{Type: tea.KeyCtrlR})
 	m = next.(model)
 	if !m.entries[m.order[0]].recapping {
 		t.Error("not shown as recapping")
@@ -260,7 +260,7 @@ func TestRRecapsTheSelectedAgentAgain(t *testing.T) {
 	}
 	// Nothing to recap: says so rather than asking Claude.
 	m.cursor = len(m.order) - 1 // the empty conversation
-	next, cmd = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("r")})
+	next, cmd = m.Update(tea.KeyMsg{Type: tea.KeyCtrlR})
 	if cmd != nil || next.(model).flash != "Nothing to recap yet." {
 		t.Errorf("flash %q", next.(model).flash)
 	}
@@ -382,7 +382,7 @@ func TestOnlyTheSelectedAgentShowsYourLastPrompt(t *testing.T) {
 	if v := ansi.Strip(m.View()); strings.Contains(v, prompt) || !strings.Contains(v, "› the checkout e2e test fails") {
 		t.Errorf("the prompt didn't follow the selection:\n%s", v)
 	}
-	if v := ansi.Strip(m.View()); strings.Contains(v, "opus 5.5 · 182k ctx") || !strings.Contains(v, "sonnet 5 · 64k ctx") {
+	if v := ansi.Strip(m.View()); strings.Contains(v, "opus 5.5 · acceptEdits") || !strings.Contains(v, "   sonnet 5") {
 		t.Errorf("model and context should follow the selection:\n%s", v)
 	}
 	// The extra lines count toward the entry's height, so clicks still land.
@@ -436,9 +436,9 @@ func TestReplyToAnAgent(t *testing.T) {
 	m.width, m.height = 100, 40
 	m = settle(t, m, m.loadAgents())
 	m.cursor = 1 // done: Flaky checkout e2e test
-	m = typeText(m, "p")
-	if !m.replying || !strings.Contains(ansi.Strip(m.View()), "Reply to Flaky checkout e2e test:") {
-		t.Fatal("p didn't open the reply line")
+	m = typeText(m, "r")
+	if v := ansi.Strip(m.View()); !m.replying || !strings.Contains(v, "Reply to Flaky checkout e2e test:") || !strings.Contains(v, " ›  ") {
+		t.Fatal("r didn't open the reply line")
 	}
 	// Keys go to the reply, not the list: j types a j.
 	m = typeText(m, "just push it")
@@ -451,7 +451,7 @@ func TestReplyToAnAgent(t *testing.T) {
 		t.Errorf("flash %q", m.flash)
 	}
 	// Esc drops a reply unsent.
-	m = typeText(m, "p")
+	m = typeText(m, "r")
 	m = typeText(m, "never mind")
 	next, _ = m.Update(tea.KeyMsg{Type: tea.KeyEsc})
 	if m = next.(model); m.replying || len(src.sent) != 1 {
@@ -459,7 +459,7 @@ func TestReplyToAnAgent(t *testing.T) {
 	}
 	// A blocked agent can't take a prompt: it says to go and answer.
 	m.cursor = 0
-	m = typeText(m, "p")
+	m = typeText(m, "r")
 	m = typeText(m, "yes")
 	next, cmd = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	m = settle(t, next.(model), cmd)
@@ -505,7 +505,7 @@ func TestAReplyCanRunToSeveralLines(t *testing.T) {
 	m.width, m.height = 100, 30
 	m = settle(t, m, m.loadAgents())
 	m.cursor = 1
-	m = typeText(m, "p")
+	m = typeText(m, "r")
 	m = typeText(m, "looks good")
 	for _, nl := range []tea.KeyMsg{{Type: tea.KeyEnter, Alt: true}, {Type: tea.KeyCtrlJ}} {
 		next, _ := m.Update(nl)

@@ -369,7 +369,7 @@ func useTheme(p *palette) {
 	styleErr, styleOK, styleSelected = defaultStyleErr, defaultStyleOK, defaultStyleSelected
 	styleBlocked, styleWorking, styleDone, styleIdle = defaultStyleBlocked, defaultStyleWorking, defaultStyleDone, defaultStyleIdle
 	styleTitle, styleRecap = defaultStyleTitle, defaultStyleRecap
-	styleBranch, styleModel, styleContext, styleMode, styleToken = defaultStyleBranch, defaultStyleModel, defaultStyleContext, defaultStyleMode, defaultStyleToken
+	styleBranch, styleModel, styleTasks, styleMode, styleToken = defaultStyleBranch, defaultStyleModel, defaultStyleTasks, defaultStyleMode, defaultStyleToken
 	if p == nil {
 		return
 	}
@@ -396,7 +396,7 @@ func useTheme(p *palette) {
 	// The details under a title, each kind in its own theme colour.
 	styleBranch = fg(styleBranch, p.Mauve)
 	styleModel = fg(styleModel, p.Blue)
-	styleContext = fg(styleContext, p.Teal)
+	styleTasks = fg(styleTasks, p.Teal)
 	styleMode = fg(styleMode, p.Yellow)
 	styleToken = fg(styleToken, p.Green)
 	if p.SelectionBG != "" {

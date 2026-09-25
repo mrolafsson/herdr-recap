@@ -5,11 +5,12 @@
 - What a blocked agent is waiting for, in red under its title: its
   question, or the command or edit it wants approved.
 - The details line shows uncommitted and unpushed work (*4 files +120 −30
-  ↑1*) and task progress (*3/7 tasks*). Model, context and mode moved to
-  the selected row, with your last prompt.
+  ↑1*) and task progress (*3/7 tasks*). Model and mode moved to the
+  selected row, with your last prompt; context size is gone.
 - Right of the title, how long the agent has been in its state (*waiting
   3m*, *done 25m*), and within a status what has waited longest is first.
-- `p` replies to the selected agent without leaving the popup. Replies can
+- `r` replies to the selected agent without leaving the popup (`ctrl+r`
+  recaps it again). Replies can
   run to several lines: `alt+enter` or `ctrl+j` for a new line, or paste.
 - `herdr-recap list` shows the metadata it reads, for checking.
 

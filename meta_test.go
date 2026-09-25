@@ -63,14 +63,6 @@ func TestShortModel(t *testing.T) {
 	}
 }
 
-func TestShortTokens(t *testing.T) {
-	for n, want := range map[int]string{999: "999", 182_400: "182k", 1_000_000: "1M", 1_240_000: "1.2M"} {
-		if got := shortTokens(n); got != want {
-			t.Errorf("%d: %q", n, got)
-		}
-	}
-}
-
 func TestGitBranch(t *testing.T) {
 	repo := t.TempDir()
 	write(t, filepath.Join(repo, ".git", "HEAD"), "ref: refs/heads/feature/login\n")

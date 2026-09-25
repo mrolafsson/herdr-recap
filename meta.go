@@ -293,17 +293,6 @@ func shortModel(id string) string {
 	return name + " " + strings.ReplaceAll(version, "-", ".")
 }
 
-// shortTokens is a token count as 182k or 1.2M.
-func shortTokens(n int) string {
-	switch {
-	case n >= 1_000_000:
-		return strings.TrimSuffix(fmt.Sprintf("%.1f", float64(n)/1e6), ".0") + "M"
-	case n >= 1000:
-		return fmt.Sprintf("%dk", n/1000)
-	}
-	return fmt.Sprint(n)
-}
-
 // gitBranch reads the branch checked out in dir, or in the repo above it,
 // without running git: .git is a directory, or for a worktree a file
 // pointing at one, and its HEAD names the branch ("" when detached).

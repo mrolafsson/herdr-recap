@@ -15,8 +15,9 @@ before you pick one. Enter or a click goes to it.
 - **Details** under each title: git branch, uncommitted and unpushed work
   (*4 files +120 −30 ↑1*), task progress (*3/7 tasks*), and the pane's
   tokens (a PR badge from herdr-github, a profile…). The selected agent also
-  shows your last prompt to it, its model, context size and mode.
-- **Reply without leaving**: `p` sends the selected agent a prompt.
+  shows your last prompt to it, its model and (when it isn't the default)
+  its permission mode.
+- **Reply without leaving**: `r` sends the selected agent a prompt.
 - **Recaps** are Claude Code's own `/recap`, the summary it shows when you
   come back to a session, for every session at once.
 - **Written while you're away**, so opening the popup is instant (see
@@ -65,8 +66,8 @@ agents: no Claude calls, safe to screenshot.
 | `↑` `↓`, `k` `j`, `ctrl+p` `ctrl+n` | move |
 | `pgup` / `pgdn`, `g` / `G` | page, first / last |
 | `enter`, click | go to that agent and close |
-| `p` | reply to that agent: type, then `enter` to send (`esc` drops it). `alt+enter` or `ctrl+j` starts a new line, and pasted text keeps its lines. An agent waiting on a question or approval can't take one: go to it to answer |
-| `r`, `ctrl+r` | write that agent's recap again, now |
+| `r` | reply to that agent: type, then `enter` to send (`esc` drops it). `alt+enter` or `ctrl+j` starts a new line, and pasted text keeps its lines. An agent waiting on a question or approval can't take one: go to it to answer |
+| `ctrl+r` | write that agent's recap again, now |
 | `esc`, `q` | close |
 
 A recap written before the agent carried on says how old it is (`from 20m

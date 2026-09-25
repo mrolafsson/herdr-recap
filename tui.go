@@ -93,7 +93,7 @@ var (
 	defaultStyleRecap    = lipgloss.NewStyle()
 	defaultStyleBranch   = lipgloss.NewStyle().Foreground(lipgloss.Color("5"))
 	defaultStyleModel    = lipgloss.NewStyle().Foreground(lipgloss.Color("4"))
-	defaultStyleContext  = lipgloss.NewStyle().Foreground(lipgloss.Color("6"))
+	defaultStyleTasks    = lipgloss.NewStyle().Foreground(lipgloss.Color("6"))
 	defaultStyleMode     = lipgloss.NewStyle().Foreground(lipgloss.Color("3"))
 	defaultStyleToken    = lipgloss.NewStyle().Foreground(lipgloss.Color("2"))
 )
@@ -113,7 +113,7 @@ var (
 	styleRecap    = defaultStyleRecap
 	styleBranch   = defaultStyleBranch
 	styleModel    = defaultStyleModel
-	styleContext  = defaultStyleContext
+	styleTasks    = defaultStyleTasks
 	styleMode     = defaultStyleMode
 	styleToken    = defaultStyleToken
 )
@@ -172,7 +172,7 @@ type model struct {
 
 	mouseX, mouseY int // last pointer position; -1 until the mouse moves
 
-	// A reply being typed to the selected agent (p), sent with agent.prompt.
+	// A reply being typed to the selected agent (r), sent with agent.prompt.
 	replying  bool
 	replyTo   string // its pane
 	replyText textarea.Model
@@ -183,7 +183,13 @@ func newModel(ctx context.Context, src source) model {
 	sp.Spinner = spinner.MiniDot
 	sp.Style = lipgloss.NewStyle()
 	ti := textarea.New()
-	ti.Prompt = "   "
+	// A chevron to type after on the first line; the rest line up with it.
+	ti.SetPromptFunc(4, func(line int) string {
+		if line == 0 {
+			return " ›  "
+		}
+		return "    "
+	})
 	ti.Placeholder = "yes, go ahead"
 	ti.ShowLineNumbers = false
 	ti.CharLimit = 8000
@@ -499,7 +505,7 @@ func (m model) handleKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 	m.flash = ""
 	switch k.String() {
-	case "p":
+	case "r":
 		return m.startReply()
 	case "ctrl+c", "esc", "q":
 		return m, tea.Quit
@@ -517,7 +523,7 @@ func (m model) handleKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.move(len(m.order))
 	case "enter":
 		return m.activate()
-	case "ctrl+r", "r":
+	case "ctrl+r":
 		return m.recapAgain()
 	}
 	return m, nil
@@ -891,14 +897,11 @@ func (m model) viewEntry(e *entry, selected bool) []string {
 	if info := m.details(e, meta); len(info) > 0 {
 		lines = append(lines, "   "+shorten(strings.Join(info, styleDim.Render(" · ")), max(1, w-4)))
 	}
-	// The selected agent's model, context and mode, with the other details.
+	// The selected agent's model and (an unusual) mode, with the other details.
 	if selected && meta != nil {
 		var about []string
 		if meta.Model != "" {
 			about = append(about, styleModel.Render(shortModel(meta.Model)))
-		}
-		if meta.Context > 0 {
-			about = append(about, styleContext.Render(shortTokens(meta.Context)+" ctx"))
 		}
 		if meta.Mode != "" && meta.Mode != "default" {
 			about = append(about, styleMode.Render(meta.Mode))
@@ -949,7 +952,7 @@ func (m model) details(e *entry, meta *sessionMeta) []string {
 		info = append(info, c)
 	}
 	if meta != nil && meta.TasksTotal > 0 {
-		info = append(info, styleContext.Render(fmt.Sprintf("%d/%d tasks", meta.TasksDone, meta.TasksTotal)))
+		info = append(info, styleTasks.Render(fmt.Sprintf("%d/%d tasks", meta.TasksDone, meta.TasksTotal)))
 	}
 	if e.agent.Agent != "claude" && e.agent.Agent != "" {
 		info = append(info, styleModel.Render(e.agent.Agent))
@@ -1115,7 +1118,7 @@ func (m model) footer() []hint {
 	if m.replying {
 		return []hint{{"enter send", "enter"}, {"esc cancel", "esc"}}
 	}
-	return []hint{{"enter go to agent", "enter"}, {"p reply", "p"}, {"r recap again", "r"}, {"esc close", "esc"}}
+	return []hint{{"enter go to agent", "enter"}, {"r reply", "r"}, {"^r recap again", "ctrl+r"}, {"esc close", "esc"}}
 }
 
 // program is the running popup.

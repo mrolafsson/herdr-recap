@@ -253,13 +253,13 @@ func TestUseThemeRecoloursTheStyles(t *testing.T) {
 		"blocked": styleBlocked.GetForeground(), "working": styleWorking.GetForeground(),
 		"done": styleDone.GetForeground(), "idle": styleIdle.GetForeground(), "selected": styleSelected.GetBackground(),
 		"title": styleTitle.GetForeground(), "recap": styleRecap.GetForeground(),
-		"branch": styleBranch.GetForeground(), "model": styleModel.GetForeground(), "context": styleContext.GetForeground(),
+		"branch": styleBranch.GetForeground(), "model": styleModel.GetForeground(), "tasks": styleTasks.GetForeground(),
 		"mode": styleMode.GetForeground(), "token": styleToken.GetForeground(),
 	} {
 		want := map[string]string{"dim": p.Overlay0, "header": p.Text, "tab": p.Accent, "hint": p.Accent,
 			"err": p.Red, "ok": p.Green, "blocked": p.Red, "working": p.Peach, "done": p.Teal, "idle": p.Green,
 			"selected": p.SelectionBG, "title": p.Text, "recap": p.Subtext0,
-			"branch": p.Mauve, "model": p.Blue, "context": p.Teal, "mode": p.Yellow, "token": p.Green}[name]
+			"branch": p.Mauve, "model": p.Blue, "tasks": p.Teal, "mode": p.Yellow, "token": p.Green}[name]
 		if got != lipgloss.Color(want) {
 			t.Errorf("%s: %v, want %s", name, got, want)
 		}
