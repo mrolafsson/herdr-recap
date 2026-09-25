@@ -96,8 +96,7 @@ command = "herdr-recap.open"
 ```
 
 On macOS, `alt` needs Option to send Alt in your terminal (Ghostty:
-`macos-option-as-alt = true`); or pick a key without it, such as
-`prefix+i`.
+`macos-option-as-alt = true`).
 
 Then `herdr server reload-config`, and **start a new herdr client** (detach
 and run `herdr` again): a client that was already open keeps the key
