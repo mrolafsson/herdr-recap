@@ -97,10 +97,10 @@ func TestTheViewShowsStatusTitleAndRecap(t *testing.T) {
 	for _, want := range []string{
 		"Recap", "1 needs you", "1 done", "2 working", "2 idle",
 		"◉ Move billing webhooks to v2 events", "billing · waiting 2m",
-		"⎇ billing/webhooks-v2 · 6 files +214 −58 ↑2 · 4/5 tasks · #412",
+		"billing/webhooks-v2 · 6 files +214 −58 ↑2 · 4/5 tasks · #412",
 		"? Run npm run migrate -- --env staging",
 		"storefront · done 12m", "storefront · working 18m", "docs · idle 2h",
-		"⎇ settings-dark-mode · 14 files +530 −121 · 3/7 tasks", "⎇ main · ↑1", "codex · #415",
+		"settings-dark-mode · 14 files +530 −121 · 3/7 tasks", "main · ↑1", "codex · #415",
 		"opus 5.5 · acceptEdits",
 		"● Flaky checkout e2e test", "✓ Release notes for 2.4",
 		"scratch", "Nothing to recap yet.", "Recaps are for Claude agents.",

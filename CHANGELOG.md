@@ -13,6 +13,10 @@
   recaps it again). Replies can
   run to several lines: `alt+enter` or `ctrl+j` for a new line, or paste.
 - `herdr-recap list` shows the metadata it reads, for checking.
+- Glyphs that common monospace fonts lack are gone: the working spinner is
+  a pie (◔ ◕) rather than braille, and the branch has no ⎇.
+- README: why it exists, scanning the list and replying from it, with
+  screenshots from the demo (`scripts/screenshots.sh`).
 
 - A details line under each agent: git branch, model, context size,
   permission mode and the pane's tokens (`tokens` in config.json picks

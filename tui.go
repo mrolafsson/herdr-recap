@@ -180,7 +180,10 @@ type model struct {
 
 func newModel(ctx context.Context, src source) model {
 	sp := spinner.New()
-	sp.Spinner = spinner.MiniDot
+	// A pie filling and emptying: in progress, and unlike braille or ◐◓◑◒
+	// it's in common monospace fonts such as JetBrains Mono (a glyph from a
+	// fallback font can come out the wrong width). ● stays done's.
+	sp.Spinner = spinner.Spinner{Frames: []string{"◔", "◕"}, FPS: time.Second / 3}
 	sp.Style = lipgloss.NewStyle()
 	ti := textarea.New()
 	// A chevron to type after on the first line; the rest line up with it.
@@ -946,7 +949,9 @@ func (m model) details(e *entry, meta *sessionMeta) []string {
 		branch = meta.Branch
 	}
 	if branch != "" {
-		info = append(info, styleBranch.Render("⎇ "+shorten(branch, 40)))
+		// No branch glyph: ⎇ isn't in common monospace fonts. First, in its
+		// own colour, it reads as the branch anyway.
+		info = append(info, styleBranch.Render(shorten(branch, 40)))
 	}
 	if c := changesText(e.changes); c != "" {
 		info = append(info, c)
