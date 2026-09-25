@@ -93,3 +93,71 @@ func TestGitBranch(t *testing.T) {
 		t.Errorf("no repo: %q", got)
 	}
 }
+
+func TestPendingRequestAndPromptTime(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "t.jsonl")
+	write(t, path, strings.Join([]string{
+		`{"type":"user","timestamp":"2026-09-25T08:00:00Z","message":{"content":"push it"}}`,
+		`{"type":"assistant","timestamp":"2026-09-25T08:00:05Z","message":{"content":[{"type":"tool_use","id":"a","name":"Bash","input":{"command":"git status"}}]}}`,
+		`{"type":"user","timestamp":"2026-09-25T08:00:06Z","message":{"content":[{"type":"tool_result","tool_use_id":"a"}]}}`,
+		`{"type":"assistant","timestamp":"2026-09-25T08:00:09Z","message":{"content":[{"type":"tool_use","id":"b","name":"Bash","input":{"command":"git push\norigin main"}}]}}`,
+	}, "\n")+"\n")
+	m := readMeta(path)
+	if m.Pending != "Run git push origin main" {
+		t.Errorf("pending %q", m.Pending)
+	}
+	if !m.PendingAt.Equal(time.Date(2026, 9, 25, 8, 0, 9, 0, time.UTC)) || !m.PromptAt.Equal(time.Date(2026, 9, 25, 8, 0, 0, 0, time.UTC)) {
+		t.Errorf("pending at %v, prompt at %v: a tool result isn't a prompt", m.PendingAt, m.PromptAt)
+	}
+	// Answered: nothing pending.
+	f, _ := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0)
+	f.WriteString(`{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"b"}]}}` + "\n")
+	f.Close()
+	if m := readMeta(path); m.Pending != "" {
+		t.Errorf("answered, still pending %q", m.Pending)
+	}
+}
+
+func TestPendingText(t *testing.T) {
+	for _, c := range []struct{ name, input, want string }{
+		{"AskUserQuestion", `{"questions":[{"question":"Public or private?"}]}`, "Public or private?"},
+		{"ExitPlanMode", `{}`, "Approve its plan?"},
+		{"Bash", `{"command":"rm -rf dist"}`, "Run rm -rf dist"},
+		{"Edit", `{"file_path":"/a/b/tui.go"}`, "Edit tui.go"},
+		{"Write", `{"file_path":"/a/README.md"}`, "Write README.md"},
+		{"WebFetch", `{"url":"https://x.dev"}`, "Fetch https://x.dev"},
+		{"mcp__linear__save_issue", `{}`, "Use save_issue (linear)"},
+		{"Frobnicate", `{}`, "Use Frobnicate"},
+	} {
+		if got := pendingText(c.name, []byte(c.input)); got != c.want {
+			t.Errorf("%s: %q", c.name, got)
+		}
+	}
+}
+
+func TestTasks(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "t.jsonl")
+	use := func(name, input string) string {
+		return `{"type":"assistant","message":{"content":[{"type":"tool_use","id":"x","name":"` + name + `","input":` + input + `}]}}`
+	}
+	// TodoWrite: the latest list counts.
+	write(t, path, strings.Join([]string{
+		use("TodoWrite", `{"todos":[{"status":"completed"},{"status":"pending"}]}`),
+		use("TodoWrite", `{"todos":[{"status":"completed"},{"status":"completed"},{"status":"in_progress"}]}`),
+	}, "\n")+"\n")
+	if m := readMeta(path); m.TasksDone != 2 || m.TasksTotal != 3 {
+		t.Errorf("todos %d/%d", m.TasksDone, m.TasksTotal)
+	}
+	// TaskCreate and TaskUpdate: created, less deleted; done by latest status.
+	write(t, path, strings.Join([]string{
+		use("TaskCreate", `{"subject":"a"}`), use("TaskCreate", `{"subject":"b"}`),
+		use("TaskCreate", `{"subject":"c"}`), use("TaskCreate", `{"subject":"d"}`),
+		use("TaskUpdate", `{"taskId":"1","status":"in_progress"}`),
+		use("TaskUpdate", `{"taskId":"1","status":"completed"}`),
+		use("TaskUpdate", `{"taskId":2,"status":"completed"}`),
+		use("TaskUpdate", `{"taskId":"4","status":"deleted"}`),
+	}, "\n")+"\n")
+	if m := readMeta(path); m.TasksDone != 2 || m.TasksTotal != 3 {
+		t.Errorf("tasks %d/%d", m.TasksDone, m.TasksTotal)
+	}
+}

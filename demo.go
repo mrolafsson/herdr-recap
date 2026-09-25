@@ -29,6 +29,7 @@ type demoAgent struct {
 	later   string // the recap written when it's out of date
 	meta    sessionMeta
 	active  time.Duration // when it last did anything, from the demo's start
+	changes gitChanges
 }
 
 var demoWorkspaces = []workspaceInfo{
@@ -39,33 +40,38 @@ var demoWorkspaces = []workspaceInfo{
 
 var demoAgents = []demoAgent{
 	{
-		agent: agentInfo{PaneID: "w2:p1", WorkspaceID: "w2", Agent: "claude", Status: "blocked", Title: "Move billing webhooks to v2 events", StateChangeSeq: 4,
+		agent: agentInfo{PaneID: "w2:p1", Cwd: "/demo/w2-p1", WorkspaceID: "w2", Agent: "claude", Status: "blocked", Title: "Move billing webhooks to v2 events", StateChangeSeq: 4,
 			Tokens: map[string]string{"pr": "#412", "pr_checks": "passing"}},
 		session: "0b3c9a51-5d7e-4f7a-9c35-1a2b3c4d5e01", age: 3 * time.Minute, current: true,
 		meta: sessionMeta{Branch: "billing/webhooks-v2", Model: "claude-opus-5-5", Context: 182_000, Mode: "acceptEdits",
-			LastPrompt: "run the migration against staging when the tests pass"},
-		active: -2 * time.Minute,
-		recap:  "Moving the billing webhooks to v2 events: handlers and tests are done. Waiting on you to approve running the migration against staging.",
+			LastPrompt: "run the migration against staging when the tests pass",
+			Pending:    "Run npm run migrate -- --env staging", TasksDone: 4, TasksTotal: 5},
+		changes: gitChanges{Files: 6, Added: 214, Deleted: 58, Ahead: 2},
+		active:  -2 * time.Minute,
+		recap:   "Moving the billing webhooks to v2 events: handlers and tests are done. Waiting on you to approve running the migration against staging.",
 	},
 	{
-		agent:   agentInfo{PaneID: "w1:p3", WorkspaceID: "w1", Agent: "claude", Status: "done", Title: "Flaky checkout e2e test", StateChangeSeq: 9},
+		agent:   agentInfo{PaneID: "w1:p3", Cwd: "/demo/w1-p3", WorkspaceID: "w1", Agent: "claude", Status: "done", Title: "Flaky checkout e2e test", StateChangeSeq: 9},
 		session: "0b3c9a51-5d7e-4f7a-9c35-1a2b3c4d5e02", age: 12 * time.Minute, current: true,
 		meta: sessionMeta{Branch: "fix/checkout-flake", Model: "claude-sonnet-5", Context: 64_000,
 			LastPrompt: "the checkout e2e test fails about one run in five, find out why"},
-		active: -12 * time.Minute,
-		recap:  "Fixed the flaky checkout test: it raced the cart animation, now it waits for the total. Next, push the branch and open the PR.",
+		changes: gitChanges{Files: 1, Added: 12, Deleted: 3},
+		active:  -12 * time.Minute,
+		recap:   "Fixed the flaky checkout test: it raced the cart animation, now it waits for the total. Next, push the branch and open the PR.",
 	},
 	{
-		agent:   agentInfo{PaneID: "w1:p1", WorkspaceID: "w1", Agent: "claude", Status: "working", Title: "Dark mode for the settings page", StateChangeSeq: 12},
+		agent:   agentInfo{PaneID: "w1:p1", Cwd: "/demo/w1-p1", WorkspaceID: "w1", Agent: "claude", Status: "working", Title: "Dark mode for the settings page", StateChangeSeq: 12},
 		session: "0b3c9a51-5d7e-4f7a-9c35-1a2b3c4d5e03", age: 41 * time.Minute,
 		meta: sessionMeta{Branch: "settings-dark-mode", Model: "claude-opus-5-5", Context: 1_240_000, Mode: "auto",
-			LastPrompt: "dark mode for the whole settings page, match the design file"},
-		active: 0,
-		recap:  "Adding dark mode to settings: colour tokens are in, the form fields are next.",
-		later:  "Adding dark mode to settings: tokens and form fields are done, and it's now fixing contrast in the billing table. Next, screenshots for review.",
+			LastPrompt: "dark mode for the whole settings page, match the design file", TasksDone: 3, TasksTotal: 7},
+		changes: gitChanges{Files: 14, Added: 530, Deleted: 121},
+		active:  0,
+		recap:   "Adding dark mode to settings: colour tokens are in, the form fields are next.",
+		later:   "Adding dark mode to settings: tokens and form fields are done, and it's now fixing contrast in the billing table. Next, screenshots for review.",
 	},
 	{
-		agent:   agentInfo{PaneID: "w3:p2", WorkspaceID: "w3", Agent: "claude", Status: "idle", Title: "Release notes for 2.4", StateChangeSeq: 3},
+		agent:   agentInfo{PaneID: "w3:p2", Cwd: "/demo/w3-p2", WorkspaceID: "w3", Agent: "claude", Status: "idle", Title: "Release notes for 2.4", StateChangeSeq: 3},
+		changes: gitChanges{Ahead: 1},
 		session: "0b3c9a51-5d7e-4f7a-9c35-1a2b3c4d5e04", age: 2 * time.Hour, current: true,
 		meta: sessionMeta{Branch: "main", Model: "claude-haiku-4-5-20251001", Context: 23_000,
 			LastPrompt: "draft release notes for 2.4 from the merged PRs"},
@@ -73,11 +79,11 @@ var demoAgents = []demoAgent{
 		recap:  "Drafted the 2.4 release notes from the merged PRs and grouped them by area. Next, check the upgrade section with the platform team.",
 	},
 	{
-		agent:   agentInfo{PaneID: "w3:p4", WorkspaceID: "w3", Agent: "claude", Status: "idle", Title: "", Name: "scratch", StateChangeSeq: 1},
+		agent:   agentInfo{PaneID: "w3:p4", Cwd: "/demo/w3-p4", WorkspaceID: "w3", Agent: "claude", Status: "idle", Title: "", Name: "scratch", StateChangeSeq: 1},
 		session: "0b3c9a51-5d7e-4f7a-9c35-1a2b3c4d5e05",
 	},
 	{
-		agent: agentInfo{PaneID: "w2:p3", WorkspaceID: "w2", Agent: "codex", Status: "working", Title: "Rate limiter for the public API", StateChangeSeq: 7,
+		agent: agentInfo{PaneID: "w2:p3", Cwd: "/demo/w2-p3", WorkspaceID: "w2", Agent: "codex", Status: "working", Title: "Rate limiter for the public API", StateChangeSeq: 7,
 			Tokens: map[string]string{"pr": "#415"}},
 	},
 }
@@ -118,6 +124,9 @@ func (d *demoSource) session(paneID string) (claudeSession, error) {
 	s := claudeSession{ID: a.session, Cwd: "/demo", Meta: a.meta}
 	if s.Meta.Model != "" {
 		s.Meta.Active = d.started.Add(a.active)
+		s.Meta.PendingAt = s.Meta.Active
+		// The working one has been at it since a while before its last message.
+		s.Meta.PromptAt = s.Meta.Active.Add(-18 * time.Minute)
 	}
 	if a.recap != "" {
 		s.Transcript = "/demo/" + a.session + ".jsonl"
@@ -155,3 +164,15 @@ func (d *demoSource) recap(ctx context.Context, s claudeSession, force bool) (re
 }
 
 func (d *demoSource) focus(string) error { return errDemo }
+
+// changes are the demo's made-up worktrees, by the agent in them.
+func (d *demoSource) changes(dir string) gitChanges {
+	for _, a := range demoAgents {
+		if a.agent.Cwd == dir {
+			return a.changes
+		}
+	}
+	return gitChanges{}
+}
+
+func (d *demoSource) prompt(string, string) error { return nil }

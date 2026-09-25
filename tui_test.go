@@ -96,12 +96,15 @@ func TestTheViewShowsStatusTitleAndRecap(t *testing.T) {
 	v := ansi.Strip(m.View())
 	for _, want := range []string{
 		"Recap", "1 needs you", "1 done", "2 working", "2 idle",
-		"◉ Move billing webhooks to v2 events", "billing · 2m ago",
-		"⎇ billing/webhooks-v2 · opus 5.5 · 182k ctx · acceptEdits · #412",
-		"⎇ settings-dark-mode · opus 5.5 · 1.2M ctx · auto", "codex · #415",
+		"◉ Move billing webhooks to v2 events", "billing · waiting 2m",
+		"⎇ billing/webhooks-v2 · 6 files +214 −58 ↑2 · 4/5 tasks · #412",
+		"? Run npm run migrate -- --env staging",
+		"storefront · done 12m", "storefront · working 18m", "docs · idle 2h",
+		"⎇ settings-dark-mode · 14 files +530 −121 · 3/7 tasks", "⎇ main · ↑1", "codex · #415",
+		"opus 5.5 · 182k ctx · acceptEdits",
 		"● Flaky checkout e2e test", "✓ Release notes for 2.4",
 		"scratch", "Nothing to recap yet.", "Recaps are for Claude agents.",
-		"enter go to agent · r recap again · esc close",
+		"enter go to agent · p reply · r recap again · esc close",
 	} {
 		if !strings.Contains(v, want) {
 			t.Errorf("view lacks %q:\n%s", want, v)
@@ -379,10 +382,13 @@ func TestOnlyTheSelectedAgentShowsYourLastPrompt(t *testing.T) {
 	if v := ansi.Strip(m.View()); strings.Contains(v, prompt) || !strings.Contains(v, "› the checkout e2e test fails") {
 		t.Errorf("the prompt didn't follow the selection:\n%s", v)
 	}
-	// The extra line counts toward the entry's height, so clicks still land.
+	if v := ansi.Strip(m.View()); strings.Contains(v, "opus 5.5 · 182k ctx") || !strings.Contains(v, "sonnet 5 · 64k ctx") {
+		t.Errorf("model and context should follow the selection:\n%s", v)
+	}
+	// The extra lines count toward the entry's height, so clicks still land.
 	selected := m.entryHeight(1)
 	m.cursor = 0
-	if selected != m.entryHeight(1)+1 {
+	if selected != m.entryHeight(1)+2 {
 		t.Errorf("selected %d lines, unselected %d", selected, m.entryHeight(1))
 	}
 }
@@ -397,5 +403,96 @@ func TestTokenValues(t *testing.T) {
 	}
 	if got := tokenValues(map[string]string{"pr_state": "open"}, nil); len(got) != 1 {
 		t.Errorf("pr details without a pr are shown: %q", got)
+	}
+}
+
+// replySource records replies, and refuses them for a blocked agent.
+type replySource struct {
+	*demoSource
+	mu   sync.Mutex
+	sent []string
+}
+
+func (r *replySource) prompt(pane, text string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if pane == "w2:p1" {
+		return &herdrError{"agent_blocked", "agent is blocked"}
+	}
+	r.sent = append(r.sent, pane+": "+text)
+	return nil
+}
+
+func typeText(m model, s string) model {
+	next, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(s)})
+	return next.(model)
+}
+
+func TestReplyToAnAgent(t *testing.T) {
+	d := newDemoSource()
+	d.delay = 0
+	src := &replySource{demoSource: d}
+	m := newModel(context.Background(), src)
+	m.width, m.height = 100, 40
+	m = settle(t, m, m.loadAgents())
+	m.cursor = 1 // done: Flaky checkout e2e test
+	m = typeText(m, "p")
+	if !m.replying || !strings.Contains(ansi.Strip(m.View()), "Reply to Flaky checkout e2e test:") {
+		t.Fatal("p didn't open the reply line")
+	}
+	// Keys go to the reply, not the list: j types a j.
+	m = typeText(m, "just push it")
+	next, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = settle(t, next.(model), cmd)
+	if len(src.sent) != 1 || src.sent[0] != "w1:p3: just push it" || m.replying {
+		t.Fatalf("sent %v", src.sent)
+	}
+	if !strings.Contains(m.flash, "Sent to Flaky checkout e2e test") {
+		t.Errorf("flash %q", m.flash)
+	}
+	// Esc drops a reply unsent.
+	m = typeText(m, "p")
+	m = typeText(m, "never mind")
+	next, _ = m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	if m = next.(model); m.replying || len(src.sent) != 1 {
+		t.Error("esc sent the reply or kept the line open")
+	}
+	// A blocked agent can't take a prompt: it says to go and answer.
+	m.cursor = 0
+	m = typeText(m, "p")
+	m = typeText(m, "yes")
+	next, cmd = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = settle(t, next.(model), cmd)
+	if !strings.Contains(m.err, "waiting on a question or approval") {
+		t.Errorf("err %q", m.err)
+	}
+}
+
+func TestInState(t *testing.T) {
+	now := time.Date(2026, 9, 25, 12, 0, 0, 0, time.UTC)
+	m := model{now: func() time.Time { return now }}
+	e := &entry{agent: agentInfo{Status: "blocked"}, session: &claudeSession{Meta: sessionMeta{
+		Active: now.Add(-1 * time.Minute), PendingAt: now.Add(-3 * time.Minute), PromptAt: now.Add(-20 * time.Minute)}}}
+	for status, want := range map[string]string{"blocked": "waiting 3m", "working": "working 20m", "done": "done 1m", "idle": "idle 1m", "unknown": ""} {
+		e.agent.Status = status
+		if got := m.inState(e); got != want {
+			t.Errorf("%s: %q", status, got)
+		}
+	}
+	if got := m.inState(&entry{agent: agentInfo{Status: "done"}}); got != "" {
+		t.Errorf("no session: %q", got)
+	}
+}
+
+func TestChangesText(t *testing.T) {
+	for c, want := range map[gitChanges]string{
+		{}:                                  "",
+		{Files: 1, Added: 2}:                "1 file +2",
+		{Files: 4, Added: 120, Deleted: 30}: "4 files +120 −30",
+		{Ahead: 2, Behind: 1}:               "↑2 ↓1",
+	} {
+		if got := ansi.Strip(changesText(c)); got != want {
+			t.Errorf("%+v: %q", c, got)
+		}
 	}
 }

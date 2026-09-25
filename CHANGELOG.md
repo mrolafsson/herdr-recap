@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- What a blocked agent is waiting for, in red under its title: its
+  question, or the command or edit it wants approved.
+- The details line shows uncommitted and unpushed work (*4 files +120 −30
+  ↑1*) and task progress (*3/7 tasks*). Model, context and mode moved to
+  the selected row, with your last prompt.
+- Right of the title, how long the agent has been in its state (*waiting
+  3m*, *done 25m*), and within a status what has waited longest is first.
+- `p` replies to the selected agent without leaving the popup.
+- `herdr-recap list` shows the metadata it reads, for checking.
+
 - A details line under each agent: git branch, model, context size,
   permission mode and the pane's tokens (`tokens` in config.json picks
   which). The selected agent also shows your last prompt to it.

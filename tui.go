@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/charmbracelet/bubbles/spinner"
+	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
@@ -46,6 +47,18 @@ type recapMsg struct {
 }
 
 type focusedMsg struct{ err error }
+
+// changesMsg is git's answer about an agent's worktree, read at `at`.
+type changesMsg struct {
+	pane, at string
+	changes  gitChanges
+}
+
+// repliedMsg is how sending a reply went.
+type repliedMsg struct {
+	pane, title string
+	err         error
+}
 
 // pollEvery is how often the open popup re-reads herdr's agents.
 const pollEvery = time.Second
@@ -132,6 +145,7 @@ type entry struct {
 	note        string // why there's no recap: not Claude, nothing said yet, an error
 	branch      string // the git branch in the agent's folder
 	branchAt    string // the folder and status change branch was read at
+	changes     gitChanges
 }
 
 type model struct {
@@ -153,15 +167,24 @@ type model struct {
 	now        func() time.Time
 
 	mouseX, mouseY int // last pointer position; -1 until the mouse moves
+
+	// A reply being typed to the selected agent (p), sent with agent.prompt.
+	replying  bool
+	replyTo   string // its pane
+	replyText textinput.Model
 }
 
 func newModel(ctx context.Context, src source) model {
 	sp := spinner.New()
 	sp.Spinner = spinner.MiniDot
 	sp.Style = lipgloss.NewStyle()
+	ti := textinput.New()
+	ti.Prompt = ""
+	ti.Placeholder = "yes, go ahead"
+	ti.CharLimit = 2000
 	return model{
 		ctx: ctx, src: src, entries: map[string]*entry{}, spin: sp,
-		sem: make(chan struct{}, maxRecapping), now: time.Now, mouseX: -1, mouseY: -1,
+		sem: make(chan struct{}, maxRecapping), now: time.Now, mouseX: -1, mouseY: -1, replyText: ti,
 	}
 }
 
@@ -286,6 +309,23 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case changesMsg:
+		if e := m.entries[msg.pane]; e != nil && e.branchAt == msg.at {
+			e.changes = msg.changes
+		}
+		return m, nil
+
+	case repliedMsg:
+		switch {
+		case isHerdrCode(msg.err, "agent_blocked"):
+			m.err = shorten(msg.title, 40) + " is waiting on a question or approval: go to it (enter) to answer."
+		case msg.err != nil:
+			m.err = "Couldn't send the reply: " + msg.err.Error()
+		default:
+			m.flash = "Sent to " + shorten(msg.title, 60) + "."
+		}
+		return m, nil
+
 	case focusedMsg:
 		if errors.Is(msg.err, errDemo) {
 			m.flash = "In the demo that's as far as it goes: the agents are made up."
@@ -327,6 +367,8 @@ func (m *model) updateAgents(agents []agentInfo, workspaces []workspaceInfo) tea
 		// then (a few small files), not every second.
 		if at := a.Cwd + "\x00" + strconv.FormatInt(a.StateChangeSeq, 10); a.Cwd != "" && e.branchAt != at {
 			e.branch, e.branchAt = gitBranch(a.Cwd), at
+			src, pane, cwd := m.src, a.PaneID, a.Cwd
+			cmds = append(cmds, func() tea.Msg { return changesMsg{pane, at, src.changes(cwd)} })
 		}
 		if a.Agent != "claude" {
 			e.session, e.recap, e.note = nil, nil, "Recaps are for Claude agents."
@@ -390,6 +432,14 @@ func (m *model) sortEntries() {
 		if ra, rb := statusRank(a.Status), statusRank(b.Status); ra != rb {
 			return ra < rb
 		}
+		// Within a status, what has waited longest first.
+		sa, sb := m.inStateSince(m.entries[m.order[i]]), m.inStateSince(m.entries[m.order[j]])
+		if !sa.Equal(sb) && !sa.IsZero() && !sb.IsZero() {
+			return sa.Before(sb)
+		}
+		if sa.IsZero() != sb.IsZero() {
+			return !sa.IsZero()
+		}
 		wa, oka := wsIndex[a.WorkspaceID]
 		wb, okb := wsIndex[b.WorkspaceID]
 		if oka != okb {
@@ -432,8 +482,13 @@ func (m model) selected() *entry {
 }
 
 func (m model) handleKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if m.replying {
+		return m.handleReplyKey(k)
+	}
 	m.flash = ""
 	switch k.String() {
+	case "p":
+		return m.startReply()
 	case "ctrl+c", "esc", "q":
 		return m, tea.Quit
 	case "up", "k", "ctrl+p":
@@ -454,6 +509,42 @@ func (m model) handleKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.recapAgain()
 	}
 	return m, nil
+}
+
+// startReply opens the reply line for the selected agent.
+func (m model) startReply() (tea.Model, tea.Cmd) {
+	e := m.selected()
+	if e == nil {
+		return m, nil
+	}
+	m.replying, m.replyTo, m.err = true, e.agent.PaneID, ""
+	m.replyText.SetValue("")
+	return m, m.replyText.Focus()
+}
+
+// handleReplyKey is typing a reply: enter sends it, esc drops it.
+func (m model) handleReplyKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch k.String() {
+	case "ctrl+c":
+		return m, tea.Quit
+	case "esc":
+		m.replying = false
+		m.replyText.Blur()
+		return m, nil
+	case "enter":
+		text := strings.TrimSpace(m.replyText.Value())
+		m.replying = false
+		m.replyText.Blur()
+		e := m.entries[m.replyTo]
+		if text == "" || e == nil {
+			return m, nil
+		}
+		src, pane, name := m.src, e.agent.PaneID, title(e.agent)
+		return m, func() tea.Msg { return repliedMsg{pane, name, src.prompt(pane, text)} }
+	}
+	var cmd tea.Cmd
+	m.replyText, cmd = m.replyText.Update(k)
+	return m, cmd
 }
 
 // activate goes to the selected agent, closing the popup once herdr has.
@@ -754,8 +845,8 @@ func (m model) viewEntry(e *entry, selected bool) []string {
 			}
 		}
 	}
-	if meta != nil && !meta.Active.IsZero() {
-		right = append(right, ago(m.now(), meta.Active))
+	if s := m.inState(e); s != "" {
+		right = append(right, s)
 	}
 	left := " " + m.glyph(e.agent.Status) + " "
 	style := styleTitle
@@ -769,6 +860,10 @@ func (m model) viewEntry(e *entry, selected bool) []string {
 	if info := m.details(e, meta); len(info) > 0 {
 		lines = append(lines, "   "+shorten(strings.Join(info, styleDim.Render(" · ")), max(1, w-4)))
 	}
+	// What a blocked agent is waiting for: its pending question or request.
+	if e.agent.Status == "blocked" && meta != nil && meta.Pending != "" {
+		lines = append(lines, "   "+styleBlocked.Render(shorten("? "+meta.Pending, max(1, w-4))))
+	}
 	body, dim := m.body(e)
 	for _, l := range body {
 		if dim {
@@ -778,8 +873,23 @@ func (m model) viewEntry(e *entry, selected bool) []string {
 		}
 		lines = append(lines, "   "+l)
 	}
-	if selected && meta != nil && meta.LastPrompt != "" {
-		lines = append(lines, "   "+styleDim.Italic(true).Render(shorten("› "+meta.LastPrompt, max(1, w-4))))
+	if selected && meta != nil {
+		if meta.LastPrompt != "" {
+			lines = append(lines, "   "+styleDim.Italic(true).Render(shorten("› "+meta.LastPrompt, max(1, w-4))))
+		}
+		var about []string
+		if meta.Model != "" {
+			about = append(about, styleModel.Render(shortModel(meta.Model)))
+		}
+		if meta.Context > 0 {
+			about = append(about, styleContext.Render(shortTokens(meta.Context)+" ctx"))
+		}
+		if meta.Mode != "" && meta.Mode != "default" {
+			about = append(about, styleMode.Render(meta.Mode))
+		}
+		if len(about) > 0 {
+			lines = append(lines, "   "+shorten(strings.Join(about, styleDim.Render(" · ")), max(1, w-4)))
+		}
 	}
 	if selected {
 		for i, l := range lines {
@@ -790,7 +900,8 @@ func (m model) viewEntry(e *entry, selected bool) []string {
 }
 
 // details is the line under a title, each piece in its own colour: branch,
-// model, context, mode, the pane's tokens, and how current the recap is.
+// uncommitted and unpushed work, task progress, the pane's tokens, and how
+// current the recap is. Model, context and mode are the selected row's.
 func (m model) details(e *entry, meta *sessionMeta) []string {
 	var info []string
 	branch := e.branch
@@ -800,19 +911,14 @@ func (m model) details(e *entry, meta *sessionMeta) []string {
 	if branch != "" {
 		info = append(info, styleBranch.Render("⎇ "+shorten(branch, 40)))
 	}
+	if c := changesText(e.changes); c != "" {
+		info = append(info, c)
+	}
+	if meta != nil && meta.TasksTotal > 0 {
+		info = append(info, styleContext.Render(fmt.Sprintf("%d/%d tasks", meta.TasksDone, meta.TasksTotal)))
+	}
 	if e.agent.Agent != "claude" && e.agent.Agent != "" {
 		info = append(info, styleModel.Render(e.agent.Agent))
-	}
-	if meta != nil {
-		if meta.Model != "" {
-			info = append(info, styleModel.Render(shortModel(meta.Model)))
-		}
-		if meta.Context > 0 {
-			info = append(info, styleContext.Render(shortTokens(meta.Context)+" ctx"))
-		}
-		if meta.Mode != "" && meta.Mode != "default" {
-			info = append(info, styleMode.Render(meta.Mode))
-		}
 	}
 	for _, v := range tokenValues(e.agent.Tokens, m.tokens) {
 		info = append(info, styleToken.Render(v))
@@ -824,6 +930,79 @@ func (m model) details(e *entry, meta *sessionMeta) []string {
 		info = append(info, styleDim.Render("recap from "+ago(m.now(), e.recap.At)))
 	}
 	return info
+}
+
+// changesText is a worktree's work in progress: "4 files +120 −30 ↑1 ↓2",
+// the counts in the theme's colours; "" when there's none.
+func changesText(c gitChanges) string {
+	var parts []string
+	if c.Files > 0 {
+		unit := " files"
+		if c.Files == 1 {
+			unit = " file"
+		}
+		parts = append(parts, styleMode.Render(strconv.Itoa(c.Files)+unit))
+	}
+	if c.Added > 0 {
+		parts = append(parts, styleOK.Render("+"+strconv.Itoa(c.Added)))
+	}
+	if c.Deleted > 0 {
+		parts = append(parts, styleErr.Render("−"+strconv.Itoa(c.Deleted)))
+	}
+	if c.Ahead > 0 {
+		parts = append(parts, styleMode.Render("↑"+strconv.Itoa(c.Ahead)))
+	}
+	if c.Behind > 0 {
+		parts = append(parts, styleMode.Render("↓"+strconv.Itoa(c.Behind)))
+	}
+	return strings.Join(parts, " ")
+}
+
+// inStateSince is when the agent entered its status, as far as its
+// conversation shows: when it started waiting on you (its pending request),
+// when you last prompted it (working), or its last message (done, idle).
+func (m model) inStateSince(e *entry) time.Time {
+	if e == nil || e.session == nil {
+		return time.Time{}
+	}
+	meta := e.session.Meta
+	switch e.agent.Status {
+	case "blocked":
+		if !meta.PendingAt.IsZero() {
+			return meta.PendingAt
+		}
+	case "working":
+		if !meta.PromptAt.IsZero() {
+			return meta.PromptAt
+		}
+	}
+	return meta.Active
+}
+
+// inState is the status and how long it's lasted: "waiting 3m", "done 25m".
+func (m model) inState(e *entry) string {
+	since := m.inStateSince(e)
+	if since.IsZero() {
+		return ""
+	}
+	label := map[string]string{"blocked": "waiting", "working": "working", "done": "done", "idle": "idle"}[e.agent.Status]
+	if label == "" {
+		return ""
+	}
+	return label + " " + duration(m.now().Sub(since))
+}
+
+// duration is a span, briefly: "<1m", "4m", "2h", "3d".
+func duration(d time.Duration) string {
+	switch {
+	case d < time.Minute:
+		return "<1m"
+	case d < time.Hour:
+		return fmt.Sprintf("%dm", int(d.Minutes()))
+	case d < 48*time.Hour:
+		return fmt.Sprintf("%dh", int(d.Hours()))
+	}
+	return fmt.Sprintf("%dd", int(d.Hours()/24))
 }
 
 // tokenValues are a pane's tokens to show, as values: the ones named in
@@ -881,6 +1060,13 @@ func highlight(line string, w int) string {
 
 // statusLine is the one line above the footer: the last error, or a note.
 func (m model) statusLine() string {
+	if m.replying {
+		name := "agent"
+		if e := m.entries[m.replyTo]; e != nil {
+			name = shorten(title(e.agent), 30)
+		}
+		return " " + styleTabOn.Render("Reply to "+name+":") + " " + m.replyText.View() + "\n"
+	}
 	switch {
 	case m.err != "":
 		return " " + styleErr.Render(shorten(clean(m.err, false), max(10, m.width-2))) + "\n"
@@ -891,7 +1077,10 @@ func (m model) statusLine() string {
 }
 
 func (m model) footer() []hint {
-	return []hint{{"enter go to agent", "enter"}, {"r recap again", "r"}, {"esc close", "esc"}}
+	if m.replying {
+		return []hint{{"enter send", "enter"}, {"esc cancel", "esc"}}
+	}
+	return []hint{{"enter go to agent", "enter"}, {"p reply", "p"}, {"r recap again", "r"}, {"esc close", "esc"}}
 }
 
 // program is the running popup.
@@ -940,6 +1129,12 @@ func debugList(cfg config) error {
 			continue
 		}
 		fmt.Printf("    session %s  config %s\n    transcript %s\n", s.ID, s.ConfigDir, s.Transcript)
+		mt := readMeta(s.Transcript)
+		c := readChanges(a.Cwd)
+		fmt.Printf("    branch %q  model %s  ctx %d  mode %q  tasks %d/%d  changes %+v\n",
+			mt.Branch, mt.Model, mt.Context, mt.Mode, mt.TasksDone, mt.TasksTotal, c)
+		fmt.Printf("    active %s  prompted %s  pending %q\n    last prompt %q\n",
+			mt.Active.Format(time.RFC3339), mt.PromptAt.Format(time.RFC3339), mt.Pending, shorten(mt.LastPrompt, 80))
 		if r, current := src.cached(s); r != nil {
 			fmt.Printf("    recap (%s, current=%v): %s\n", r.At.Format(time.RFC3339), current, r.Text)
 		}

@@ -8,10 +8,15 @@ before you pick one. Enter or a click goes to it.
 - **Live status** in herdr's sidebar glyphs and colours: `◉` needs you, a
   spinner while working, `●` done, `✓` idle. What needs you comes first.
 - **Titles** are the agents' own: Claude's title for the conversation,
-  bold, with when it was last active.
-- **Details** under each title: git branch, model, context size, permission
-  mode, and the pane's tokens (a PR badge from herdr-github, a profile…).
-  The selected agent also shows your last prompt to it.
+  bold, with how long it's been in its state: *waiting 3m*, *working 12m*,
+  *done 25m*. Within a status, what has waited longest comes first.
+- **What a blocked agent is waiting for**: its question, or the command or
+  edit it wants approved.
+- **Details** under each title: git branch, uncommitted and unpushed work
+  (*4 files +120 −30 ↑1*), task progress (*3/7 tasks*), and the pane's
+  tokens (a PR badge from herdr-github, a profile…). The selected agent also
+  shows your last prompt to it, its model, context size and mode.
+- **Reply without leaving**: `p` sends the selected agent a prompt.
 - **Recaps** are Claude Code's own `/recap`, the summary it shows when you
   come back to a session, for every session at once.
 - **Written while you're away**, so opening the popup is instant (see
@@ -60,6 +65,7 @@ agents: no Claude calls, safe to screenshot.
 | `↑` `↓`, `k` `j`, `ctrl+p` `ctrl+n` | move |
 | `pgup` / `pgdn`, `g` / `G` | page, first / last |
 | `enter`, click | go to that agent and close |
+| `p` | reply to that agent: type, then `enter` to send (`esc` drops it). An agent waiting on a question or approval can't take one: go to it to answer |
 | `r`, `ctrl+r` | write that agent's recap again, now |
 | `esc`, `q` | close |
 

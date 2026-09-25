@@ -18,6 +18,10 @@ type source interface {
 	// recap writes a current recap, or with force a new one regardless.
 	recap(ctx context.Context, s claudeSession, force bool) (recap, error)
 	focus(paneID string) error
+	// changes is git's view of a worktree: uncommitted and unpushed work.
+	changes(dir string) gitChanges
+	// prompt sends text to an agent, as if typed and entered.
+	prompt(paneID, text string) error
 }
 
 type liveSource struct{ cfg config }
@@ -49,3 +53,9 @@ func (l liveSource) recap(ctx context.Context, s claudeSession, force bool) (rec
 }
 
 func (liveSource) focus(paneID string) error { return focusAgent(paneID) }
+
+func (liveSource) changes(dir string) gitChanges { return readChanges(dir) }
+
+func (liveSource) prompt(paneID, text string) error {
+	return herdrCall("agent.prompt", map[string]any{"target": paneID, "text": text}, nil)
+}
