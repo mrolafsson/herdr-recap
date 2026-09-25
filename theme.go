@@ -344,6 +344,21 @@ func parseColor(s string) string {
 // theme is the palette in use, nil for the popup's own colours.
 var theme *palette
 
+// brightenTitle makes the title the brightest the background allows when
+// the theme leaves text to the terminal (herdr's "terminal" theme, or none):
+// bright white on dark, black on light. A theme's own text colour is
+// already its brightest, so it's kept.
+func brightenTitle(dark bool) {
+	if theme != nil && theme.Text != "" {
+		return
+	}
+	c := "0"
+	if dark {
+		c = "15"
+	}
+	styleTitle = styleTitle.Foreground(lipgloss.Color(c))
+}
+
 // useTheme recolours the popup with p, or with nil restores its own colours.
 // A Reset colour is the terminal's own; only the selection keeps the popup's
 // background then, so the selected row stays visible. The status colours are

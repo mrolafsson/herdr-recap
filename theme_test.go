@@ -292,3 +292,30 @@ func TestResetIsTheTerminalsColour(t *testing.T) {
 		t.Error("the terminal theme's ANSI accent wasn't used")
 	}
 }
+
+func TestTheTitleIsTheBrightestText(t *testing.T) {
+	t.Cleanup(func() { useTheme(nil) })
+	// A theme's own text colour is its brightest: kept.
+	useTheme(pal("dracula"))
+	brightenTitle(true)
+	if styleTitle.GetForeground() != lipgloss.Color(herdrPalettes["dracula"].Text) {
+		t.Errorf("dracula: %v", styleTitle.GetForeground())
+	}
+	// herdr's terminal theme leaves text to the terminal: bright white on
+	// dark, black on light.
+	useTheme(pal("terminal"))
+	brightenTitle(true)
+	if styleTitle.GetForeground() != lipgloss.Color("15") {
+		t.Errorf("terminal, dark: %v", styleTitle.GetForeground())
+	}
+	useTheme(pal("terminal"))
+	brightenTitle(false)
+	if styleTitle.GetForeground() != lipgloss.Color("0") {
+		t.Errorf("terminal, light: %v", styleTitle.GetForeground())
+	}
+	useTheme(nil)
+	brightenTitle(true)
+	if styleTitle.GetForeground() != lipgloss.Color("15") || !styleTitle.GetBold() {
+		t.Errorf("no theme: %v", styleTitle.GetForeground())
+	}
+}

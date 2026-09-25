@@ -1131,6 +1131,7 @@ func runPicker(ctx context.Context, cfg config, demo bool) error {
 		}
 	}
 	useTheme(pickerTheme(cfg.Theme == "dark"))
+	brightenTitle(cfg.Theme == "dark")
 	var src source = liveSource{cfg}
 	if demo {
 		src = newDemoSource()
