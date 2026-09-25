@@ -1,0 +1,14 @@
+# Changelog
+
+## 0.1.0 — 2026-09-25
+
+- First release. A popup with every agent in herdr: its status, in the
+  sidebar's glyphs and colours, its title, and for Claude agents a recap of
+  where it got to (Claude Code's own `/recap`). Enter or a click goes to it.
+- Recaps are written ahead of time: a Claude agent that finishes, or stops to
+  ask you something, and that you don't look at within
+  `recap_after_seconds` (3 minutes) gets its recap then, while its prompt
+  cache is still warm. Opening the popup rewrites any that are out of date.
+- Sessions are found through the agent's own process, so profile switchers
+  that set `CLAUDE_CONFIG_DIR` (clauth and the like) work.
+- In herdr's theme colours, and a demo on fictional agents.

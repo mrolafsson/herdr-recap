@@ -1,0 +1,138 @@
+package main
+
+import (
+	"context"
+	"errors"
+	"sync"
+	"time"
+)
+
+// demoSource is a fictional set of agents: the popup without herdr, Claude or
+// any real work on screen, for trying it out and for screenshots.
+type demoSource struct {
+	mu      sync.Mutex
+	started time.Time
+	recaps  map[string]recap
+	current map[string]bool
+	delay   time.Duration // how long a demo recap "takes"
+}
+
+// errDemo: going to an agent, in the demo, where there's nowhere to go.
+var errDemo = errors.New("the demo's agents aren't real, so there's nowhere to go")
+
+type demoAgent struct {
+	agent   agentInfo
+	session string // "" for an agent that isn't Claude
+	recap   string // "" for a session with nothing said yet
+	age     time.Duration
+	current bool
+	later   string // the recap written when it's out of date
+}
+
+var demoWorkspaces = []workspaceInfo{
+	{WorkspaceID: "w1", Label: "storefront"},
+	{WorkspaceID: "w2", Label: "billing"},
+	{WorkspaceID: "w3", Label: "docs"},
+}
+
+var demoAgents = []demoAgent{
+	{
+		agent:   agentInfo{PaneID: "w2:p1", WorkspaceID: "w2", Agent: "claude", Status: "blocked", Title: "Move billing webhooks to v2 events", StateChangeSeq: 4},
+		session: "0b3c9a51-5d7e-4f7a-9c35-1a2b3c4d5e01", age: 3 * time.Minute, current: true,
+		recap: "Moving the billing webhooks to v2 events: handlers and tests are done. Waiting on you to approve running the migration against staging.",
+	},
+	{
+		agent:   agentInfo{PaneID: "w1:p3", WorkspaceID: "w1", Agent: "claude", Status: "done", Title: "Flaky checkout e2e test", StateChangeSeq: 9},
+		session: "0b3c9a51-5d7e-4f7a-9c35-1a2b3c4d5e02", age: 12 * time.Minute, current: true,
+		recap: "Fixed the flaky checkout test: it raced the cart animation, now it waits for the total. Next, push the branch and open the PR.",
+	},
+	{
+		agent:   agentInfo{PaneID: "w1:p1", WorkspaceID: "w1", Agent: "claude", Status: "working", Title: "Dark mode for the settings page", StateChangeSeq: 12},
+		session: "0b3c9a51-5d7e-4f7a-9c35-1a2b3c4d5e03", age: 41 * time.Minute,
+		recap: "Adding dark mode to settings: colour tokens are in, the form fields are next.",
+		later: "Adding dark mode to settings: tokens and form fields are done, and it's now fixing contrast in the billing table. Next, screenshots for review.",
+	},
+	{
+		agent:   agentInfo{PaneID: "w3:p2", WorkspaceID: "w3", Agent: "claude", Status: "idle", Title: "Release notes for 2.4", StateChangeSeq: 3},
+		session: "0b3c9a51-5d7e-4f7a-9c35-1a2b3c4d5e04", age: 2 * time.Hour, current: true,
+		recap: "Drafted the 2.4 release notes from the merged PRs and grouped them by area. Next, check the upgrade section with the platform team.",
+	},
+	{
+		agent:   agentInfo{PaneID: "w3:p4", WorkspaceID: "w3", Agent: "claude", Status: "idle", Title: "", Name: "scratch", StateChangeSeq: 1},
+		session: "0b3c9a51-5d7e-4f7a-9c35-1a2b3c4d5e05",
+	},
+	{
+		agent: agentInfo{PaneID: "w2:p3", WorkspaceID: "w2", Agent: "codex", Status: "working", Title: "Rate limiter for the public API", StateChangeSeq: 7},
+	},
+}
+
+func newDemoSource() *demoSource {
+	d := &demoSource{started: time.Now(), recaps: map[string]recap{}, current: map[string]bool{}, delay: 1500 * time.Millisecond}
+	for _, a := range demoAgents {
+		if a.session != "" && a.recap != "" {
+			d.recaps[a.session] = recap{Session: a.session, Text: a.recap, At: d.started.Add(-a.age)}
+			d.current[a.session] = a.current
+		}
+	}
+	return d
+}
+
+func (d *demoSource) agents() ([]agentInfo, []workspaceInfo, error) {
+	agents := make([]agentInfo, len(demoAgents))
+	for i, a := range demoAgents {
+		agents[i] = a.agent
+	}
+	return agents, demoWorkspaces, nil
+}
+
+func (d *demoSource) find(paneID string) *demoAgent {
+	for i := range demoAgents {
+		if demoAgents[i].agent.PaneID == paneID {
+			return &demoAgents[i]
+		}
+	}
+	return nil
+}
+
+func (d *demoSource) session(paneID string) (claudeSession, error) {
+	a := d.find(paneID)
+	if a == nil || a.session == "" {
+		return claudeSession{}, errNotClaude
+	}
+	s := claudeSession{ID: a.session, Cwd: "/demo"}
+	if a.recap != "" {
+		s.Transcript = "/demo/" + a.session + ".jsonl"
+	}
+	return s, nil
+}
+
+func (d *demoSource) cached(s claudeSession) (*recap, bool) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	r, ok := d.recaps[s.ID]
+	if !ok {
+		return nil, false
+	}
+	return &r, d.current[s.ID]
+}
+
+func (d *demoSource) recap(ctx context.Context, s claudeSession, force bool) (recap, error) {
+	select {
+	case <-ctx.Done():
+		return recap{}, ctx.Err()
+	case <-time.After(d.delay):
+	}
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	text := d.recaps[s.ID].Text
+	for _, a := range demoAgents {
+		if a.session == s.ID && a.later != "" {
+			text = a.later
+		}
+	}
+	r := recap{Session: s.ID, Text: text, At: time.Now()}
+	d.recaps[s.ID], d.current[s.ID] = r, true
+	return r, nil
+}
+
+func (d *demoSource) focus(string) error { return errDemo }

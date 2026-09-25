@@ -1,0 +1,52 @@
+id = "herdr-recap"
+name = "Recap"
+version = "0.1.0"
+min_herdr_version = "0.9.0"
+description = "Every Claude agent in a herdr popup with its live status, title and a one-line recap of where it got to, written while you were away. Click one to jump to it."
+platforms = ["linux", "macos"]
+
+# Builds ./bin/herdr-recap from source with Go, or downloads the release
+# binary for this version when Go isn't installed.
+[[build]]
+command = ["sh", "scripts/build.sh"]
+
+# Bind it to a key in ~/.config/herdr/config.toml:
+#   [[keys.command]]
+#   key = "prefix+i"
+#   type = "plugin_action"
+#   command = "herdr-recap.open"
+[[actions]]
+id = "open"
+title = "Recap: your agents"
+description = "Every agent's status, title and what it was doing when you left it. Recaps that are out of date are refreshed while you look."
+contexts = ["global", "workspace", "pane"]
+command = ["./bin/herdr-recap", "action", "open"]
+
+[[actions]]
+id = "demo"
+title = "Recap: demo (fictional agents)"
+description = "The popup on made-up agents: try it, or take screenshots without showing real work."
+contexts = ["global"]
+command = ["./bin/herdr-recap", "action", "demo"]
+
+# The popup, opened by the actions above (the demo with a flag in its env).
+[[panes]]
+id = "picker"
+title = "Recap"
+placement = "popup"
+command = ["./bin/herdr-recap", "picker"]
+
+# Recaps are written ahead of time. When a Claude agent finishes a turn (done)
+# or stops to ask you something (blocked), `tick` schedules a recap for
+# recap_after_seconds later (180 by default). If you still haven't looked at
+# it by then, the recap is written; if you have, nothing is spent. Soon after
+# the turn the agent's prompt cache is still warm, so a recap costs about as
+# much as a short reply. `tick` itself only reads herdr's agent list and
+# returns: the wait runs in a detached process.
+[[events]]
+on = "pane.agent_status_changed"
+command = ["./bin/herdr-recap", "tick"]
+
+# Agents that finished while herdr (or this plugin) wasn't running.
+[[startup]]
+command = ["./bin/herdr-recap", "tick"]
