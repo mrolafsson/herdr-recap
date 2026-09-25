@@ -860,6 +860,22 @@ func (m model) viewEntry(e *entry, selected bool) []string {
 	if info := m.details(e, meta); len(info) > 0 {
 		lines = append(lines, "   "+shorten(strings.Join(info, styleDim.Render(" · ")), max(1, w-4)))
 	}
+	// The selected agent's model, context and mode, with the other details.
+	if selected && meta != nil {
+		var about []string
+		if meta.Model != "" {
+			about = append(about, styleModel.Render(shortModel(meta.Model)))
+		}
+		if meta.Context > 0 {
+			about = append(about, styleContext.Render(shortTokens(meta.Context)+" ctx"))
+		}
+		if meta.Mode != "" && meta.Mode != "default" {
+			about = append(about, styleMode.Render(meta.Mode))
+		}
+		if len(about) > 0 {
+			lines = append(lines, "   "+shorten(strings.Join(about, styleDim.Render(" · ")), max(1, w-4)))
+		}
+	}
 	// What a blocked agent is waiting for: its pending question or request.
 	if e.agent.Status == "blocked" && meta != nil && meta.Pending != "" {
 		lines = append(lines, "   "+styleBlocked.Render(shorten("? "+meta.Pending, max(1, w-4))))
@@ -876,19 +892,6 @@ func (m model) viewEntry(e *entry, selected bool) []string {
 	if selected && meta != nil {
 		if meta.LastPrompt != "" {
 			lines = append(lines, "   "+styleDim.Italic(true).Render(shorten("› "+meta.LastPrompt, max(1, w-4))))
-		}
-		var about []string
-		if meta.Model != "" {
-			about = append(about, styleModel.Render(shortModel(meta.Model)))
-		}
-		if meta.Context > 0 {
-			about = append(about, styleContext.Render(shortTokens(meta.Context)+" ctx"))
-		}
-		if meta.Mode != "" && meta.Mode != "default" {
-			about = append(about, styleMode.Render(meta.Mode))
-		}
-		if len(about) > 0 {
-			lines = append(lines, "   "+shorten(strings.Join(about, styleDim.Render(" · ")), max(1, w-4)))
 		}
 	}
 	if selected {
