@@ -5,8 +5,9 @@
 - A details line under each agent: git branch, model, context size,
   permission mode and the pane's tokens (`tokens` in config.json picks
   which). The selected agent also shows your last prompt to it.
-- Titles are bold in the theme's brightest text, recaps a step below, the
-  details dimmer still. The right side says when the agent was last active.
+- Titles are bold in the theme's brightest text, recaps a step below. Each
+  detail has its own theme colour: branch mauve, model blue, context teal,
+  mode yellow, tokens green. The right side says when the agent was last active.
 - Recaps run the agent's own `claude`, found on the agent's PATH: herdr's
   server often has a bare PATH without `~/.local/bin`.
 

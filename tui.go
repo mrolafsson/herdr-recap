@@ -74,6 +74,11 @@ var (
 	defaultStyleIdle     = lipgloss.NewStyle().Foreground(lipgloss.Color("10"))
 	defaultStyleTitle    = lipgloss.NewStyle().Bold(true)
 	defaultStyleRecap    = lipgloss.NewStyle()
+	defaultStyleBranch   = lipgloss.NewStyle().Foreground(lipgloss.Color("5"))
+	defaultStyleModel    = lipgloss.NewStyle().Foreground(lipgloss.Color("4"))
+	defaultStyleContext  = lipgloss.NewStyle().Foreground(lipgloss.Color("6"))
+	defaultStyleMode     = lipgloss.NewStyle().Foreground(lipgloss.Color("3"))
+	defaultStyleToken    = lipgloss.NewStyle().Foreground(lipgloss.Color("2"))
 )
 
 var (
@@ -89,6 +94,11 @@ var (
 	styleIdle     = defaultStyleIdle
 	styleTitle    = defaultStyleTitle
 	styleRecap    = defaultStyleRecap
+	styleBranch   = defaultStyleBranch
+	styleModel    = defaultStyleModel
+	styleContext  = defaultStyleContext
+	styleMode     = defaultStyleMode
+	styleToken    = defaultStyleToken
 )
 
 // statusRank orders the list: what needs you first, then what finished, then
@@ -757,7 +767,7 @@ func (m model) viewEntry(e *entry, selected bool) []string {
 	lines := []string{fitRow(left, style.Render(shorten(title(e.agent), room)), rightText, w)}
 
 	if info := m.details(e, meta); len(info) > 0 {
-		lines = append(lines, "   "+styleDim.Render(shorten(strings.Join(info, " · "), max(1, w-4))))
+		lines = append(lines, "   "+shorten(strings.Join(info, styleDim.Render(" · ")), max(1, w-4)))
 	}
 	body, dim := m.body(e)
 	for _, l := range body {
@@ -779,8 +789,8 @@ func (m model) viewEntry(e *entry, selected bool) []string {
 	return append(lines, "")
 }
 
-// details is the line under a title: branch, model, context, mode, the
-// pane's tokens, and how current the recap is.
+// details is the line under a title, each piece in its own colour: branch,
+// model, context, mode, the pane's tokens, and how current the recap is.
 func (m model) details(e *entry, meta *sessionMeta) []string {
 	var info []string
 	branch := e.branch
@@ -788,28 +798,30 @@ func (m model) details(e *entry, meta *sessionMeta) []string {
 		branch = meta.Branch
 	}
 	if branch != "" {
-		info = append(info, "⎇ "+shorten(branch, 40))
+		info = append(info, styleBranch.Render("⎇ "+shorten(branch, 40)))
 	}
 	if e.agent.Agent != "claude" && e.agent.Agent != "" {
-		info = append(info, e.agent.Agent)
+		info = append(info, styleModel.Render(e.agent.Agent))
 	}
 	if meta != nil {
 		if meta.Model != "" {
-			info = append(info, shortModel(meta.Model))
+			info = append(info, styleModel.Render(shortModel(meta.Model)))
 		}
 		if meta.Context > 0 {
-			info = append(info, shortTokens(meta.Context)+" ctx")
+			info = append(info, styleContext.Render(shortTokens(meta.Context)+" ctx"))
 		}
 		if meta.Mode != "" && meta.Mode != "default" {
-			info = append(info, meta.Mode)
+			info = append(info, styleMode.Render(meta.Mode))
 		}
 	}
-	info = append(info, tokenValues(e.agent.Tokens, m.tokens)...)
+	for _, v := range tokenValues(e.agent.Tokens, m.tokens) {
+		info = append(info, styleToken.Render(v))
+	}
 	switch {
 	case e.recapping && e.recap != nil:
-		info = append(info, "recapping…")
+		info = append(info, styleDim.Render("recapping…"))
 	case e.recap != nil && !e.current:
-		info = append(info, "recap from "+ago(m.now(), e.recap.At))
+		info = append(info, styleDim.Render("recap from "+ago(m.now(), e.recap.At)))
 	}
 	return info
 }
