@@ -12,7 +12,7 @@ command = ["sh", "scripts/build.sh"]
 
 # Bind it to a key in ~/.config/herdr/config.toml:
 #   [[keys.command]]
-#   key = "prefix+i"
+#   key = "prefix+alt+p"
 #   type = "plugin_action"
 #   command = "herdr-recap.open"
 [[actions]]

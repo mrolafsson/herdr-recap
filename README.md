@@ -29,7 +29,7 @@ what to look at first.
 
 ## Scan the list
 
-Open it (`prefix+i`, say) and read down. Each agent is a few lines:
+Open it (`prefix+alt+p`) and read down. Each agent is a few lines:
 
 - **Status first, what needs you at the top.** herdr's own glyphs and colours:
   `◉` needs you, `◔` working, `●` done, `✓` idle. Within a status, whatever
@@ -90,10 +90,14 @@ Bind it to a key in `~/.config/herdr/config.toml`:
 
 ```toml
 [[keys.command]]
-key = "prefix+i"
+key = "prefix+alt+p"
 type = "plugin_action"
 command = "herdr-recap.open"
 ```
+
+On macOS, `alt` needs Option to send Alt in your terminal (Ghostty:
+`macos-option-as-alt = true`); or pick a key without it, such as
+`prefix+i`.
 
 Then `herdr server reload-config`, and **start a new herdr client** (detach
 and run `herdr` again): a client that was already open keeps the key
