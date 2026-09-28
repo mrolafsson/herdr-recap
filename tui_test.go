@@ -382,13 +382,13 @@ func TestOnlyTheSelectedAgentShowsYourLastPrompt(t *testing.T) {
 	if v := ansi.Strip(m.View()); strings.Contains(v, prompt) || !strings.Contains(v, "› the checkout e2e test fails") {
 		t.Errorf("the prompt didn't follow the selection:\n%s", v)
 	}
-	if v := ansi.Strip(m.View()); strings.Contains(v, "opus 5.5 · acceptEdits") || !strings.Contains(v, "   sonnet 5") {
-		t.Errorf("model and context should follow the selection:\n%s", v)
+	if v := ansi.Strip(m.View()); strings.Contains(v, "opus 5.5 · acceptEdits") || !strings.Contains(v, "sonnet 5") {
+		t.Errorf("model and mode should follow the selection:\n%s", v)
 	}
-	// The extra lines count toward the entry's height, so clicks still land.
+	// They're on the status line, so selecting a row doesn't change its height.
 	selected := m.entryHeight(1)
 	m.cursor = 0
-	if selected != m.entryHeight(1)+2 {
+	if selected != m.entryHeight(1) {
 		t.Errorf("selected %d lines, unselected %d", selected, m.entryHeight(1))
 	}
 }

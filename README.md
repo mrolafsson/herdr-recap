@@ -43,8 +43,9 @@ Open it (`prefix+alt+r`) and read down. Each agent is a few lines:
 - **The state of its work.** Its branch; uncommitted and unpushed changes
   (*6 files +214 −58 ↑2*); its task list (*4/7 tasks*); and whatever the
   pane's other plugins report, such as its PR from herdr-github.
-- **The selected agent** also shows the last thing you asked it, its model,
-  and its permission mode when that isn't the default.
+- **The selected agent's** last prompt, model, and permission mode (when
+  it isn't the default) are on the line above the footer, so moving down the
+  list doesn't reflow it.
 
 `enter` (or a click) goes to the agent. Recaps are written ahead of time, so
 the list is complete the moment it opens.

@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+- Rows keep their height when selected: the selected agent's last prompt,
+  model and mode are on the line above the footer instead of in its row, so
+  moving down the list no longer shifts everything under it.
+- The recap comes right under the title (after what a blocked agent is
+  asking), with branch, changes and tasks below it, and on the selected row
+  it's drawn in the title's colour so it stays readable on the highlight.
+- Recap lines wrap at 80 columns at most, however wide the popup.
+
 ## 0.1.1 — 2026-09-25
 
 - Opening the popup while an earlier one is still up (left on another

@@ -643,8 +643,12 @@ func (m model) listHeight() int {
 	return max(3, m.height-listTop-2-max(0, m.replyLines()-1))
 }
 
-// recapWidth is the room a recap line has: indented under the title.
-func (m model) recapWidth() int { return max(10, m.width-6) }
+// maxRecapWidth keeps recap lines to a comfortable measure on a wide popup.
+const maxRecapWidth = 80
+
+// recapWidth is the room a recap line has: indented under the title, and no
+// wider than maxRecapWidth.
+func (m model) recapWidth() int { return max(10, min(maxRecapWidth, m.width-6)) }
 
 // body is what goes under an agent's title: its recap wrapped, or why there
 // isn't one.
@@ -668,7 +672,6 @@ func (m model) body(e *entry) (lines []string, dim bool) {
 // test holds the two to each other.)
 func (m model) entryHeight(i int) int {
 	e := m.entries[m.order[i]]
-	selected := i == m.cursor
 	var meta *sessionMeta
 	if e.session != nil {
 		meta = &e.session.Meta
@@ -678,13 +681,7 @@ func (m model) entryHeight(i int) int {
 	if m.hasDetails(e, meta) {
 		n++
 	}
-	if selected && meta != nil && (meta.Model != "" || unusualMode(meta.Mode)) {
-		n++
-	}
 	if e.agent.Status == "blocked" && meta != nil && meta.Pending != "" {
-		n++
-	}
-	if selected && meta != nil && meta.LastPrompt != "" {
 		n++
 	}
 	return n
@@ -933,40 +930,30 @@ func (m model) viewEntry(e *entry, selected bool) []string {
 	room := max(1, w-lipgloss.Width(left)-lipgloss.Width(rightText)-2)
 	lines := []string{fitRow(left, style.Render(shorten(title(e.agent), room)), rightText, w)}
 
-	if info := m.details(e, meta); len(info) > 0 {
-		lines = append(lines, "   "+shorten(strings.Join(info, styleDim.Render(" · ")), max(1, w-4)))
-	}
-	// The selected agent's model and (an unusual) mode, with the other details.
-	if selected && meta != nil {
-		var about []string
-		if meta.Model != "" {
-			about = append(about, styleModel.Render(shortModel(meta.Model)))
-		}
-		if unusualMode(meta.Mode) {
-			about = append(about, styleMode.Render(meta.Mode))
-		}
-		if len(about) > 0 {
-			lines = append(lines, "   "+shorten(strings.Join(about, styleDim.Render(" · ")), max(1, w-4)))
-		}
-	}
 	// What a blocked agent is waiting for: its pending question or request.
 	if e.agent.Status == "blocked" && meta != nil && meta.Pending != "" {
 		lines = append(lines, "   "+styleBlocked.Render(shorten("? "+meta.Pending, max(1, w-4))))
+	}
+	// The recap right under the title, where the eye lands; on the selected
+	// row in the title's colour, to stand out against the highlight.
+	recap := styleRecap
+	if selected {
+		recap = styleTitle.UnsetBold()
 	}
 	body, dim := m.body(e)
 	for _, l := range body {
 		if dim {
 			l = styleDim.Render(l)
 		} else {
-			l = styleRecap.Render(l)
+			l = recap.Render(l)
 		}
 		lines = append(lines, "   "+l)
 	}
-	if selected && meta != nil {
-		if meta.LastPrompt != "" {
-			lines = append(lines, "   "+styleDim.Italic(true).Render(shorten("› "+meta.LastPrompt, max(1, w-4))))
-		}
+	if info := m.details(e, meta); len(info) > 0 {
+		lines = append(lines, "   "+shorten(strings.Join(info, styleDim.Render(" · ")), max(1, w-4)))
 	}
+	// The selected agent's model, mode and last prompt are on the status
+	// line instead (about), so selecting a row doesn't change its height.
 	if selected {
 		for i, l := range lines {
 			lines[i] = highlight(l, w)
@@ -977,7 +964,7 @@ func (m model) viewEntry(e *entry, selected bool) []string {
 
 // details is the line under a title, each piece in its own colour: branch,
 // uncommitted and unpushed work, task progress, the pane's tokens, and how
-// current the recap is. Model, context and mode are the selected row's.
+// current the recap is. Model and mode are the selected row's, in about.
 func (m model) details(e *entry, meta *sessionMeta) []string {
 	var info []string
 	// The folder's branch, read at the last status change, is the live one;
@@ -1154,7 +1141,35 @@ func (m model) statusLine() string {
 	case m.flash != "":
 		return " " + styleDim.Render(shorten(clean(m.flash, false), max(10, m.width-2))) + "\n"
 	}
-	return "\n"
+	return m.about() + "\n"
+}
+
+// about is the selected agent's last prompt, with its model and (an
+// unusual) mode on the right, for the status line.
+func (m model) about() string {
+	if m.cursor >= len(m.order) {
+		return ""
+	}
+	e := m.entries[m.order[m.cursor]]
+	if e == nil || e.session == nil {
+		return ""
+	}
+	meta := e.session.Meta
+	var right []string
+	if meta.Model != "" {
+		right = append(right, styleModel.Render(shortModel(meta.Model)))
+	}
+	if unusualMode(meta.Mode) {
+		right = append(right, styleMode.Render(meta.Mode))
+	}
+	rightText := strings.Join(right, styleDim.Render(" · "))
+	if meta.LastPrompt == "" {
+		if rightText == "" {
+			return ""
+		}
+		return strings.Repeat(" ", max(1, m.width-lipgloss.Width(rightText)-1)) + rightText
+	}
+	return fitRow(" ", styleDim.Italic(true).Render("› "+meta.LastPrompt), rightText, m.width)
 }
 
 func (m model) footer() []hint {
