@@ -11,7 +11,7 @@ type source interface {
 	// sidebar order.
 	agents() ([]agentInfo, []workspaceInfo, error)
 	// session finds the coding agent session in a pane.
-	session(agentInfo) (claudeSession, error)
+	session(context.Context, agentInfo) (claudeSession, error)
 	// cached is the session's cached recap, if any, and whether it still
 	// describes the conversation.
 	cached(s claudeSession) (*recap, bool)
@@ -34,8 +34,8 @@ func (liveSource) agents() ([]agentInfo, []workspaceInfo, error) {
 	return agents, listWorkspaces(), nil
 }
 
-func (l liveSource) session(a agentInfo) (claudeSession, error) {
-	s, err := resolveAgentSession(context.Background(), l.cfg, a)
+func (l liveSource) session(ctx context.Context, a agentInfo) (claudeSession, error) {
+	s, err := resolveAgentSession(ctx, l.cfg, a)
 	if err == nil && (s.Agent == "" || s.Agent == "claude") {
 		s.Meta = readMeta(s.Transcript)
 	}

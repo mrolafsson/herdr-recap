@@ -64,6 +64,19 @@ type repliedMsg struct {
 // pollEvery is how often the open popup re-reads herdr's agents.
 const pollEvery = time.Second
 
+// A session lookup that fails is tried again, waiting longer each time up to
+// resolveRetryMax, so a Memex that isn't answering isn't asked every second
+// and a row that failed once isn't stuck until the agent's status changes.
+const (
+	resolveRetryBase = 2 * time.Second
+	resolveRetryMax  = 30 * time.Second
+)
+
+// memexRefreshEvery is how often a Memex-backed session is looked up again
+// while its status is unchanged: its row (and so its recap's stamp) moves as
+// Memex indexes more of the conversation, with no status change to notice.
+const memexRefreshEvery = 5 * time.Second
+
 // maxReplyLines is as tall as the reply box grows before it scrolls.
 const maxReplyLines = 6
 
@@ -136,19 +149,22 @@ func statusRank(status string) int {
 
 // entry is one agent's row.
 type entry struct {
-	agent       agentInfo
-	session     *claudeSession
-	recap       *recap
-	current     bool   // the recap describes the conversation as it is now
-	resolvedSeq int64  // the status change the session was last looked up at
-	resolving   bool   // looking up the session
-	recapping   bool   // a recap is being written
-	triedRecap  bool   // one has been asked for since the popup opened
-	again       bool   // the conversation moved on during a recap: write another after it
-	note        string // why there's no recap: not Claude, nothing said yet, an error
-	branch      string // the git branch in the agent's folder
-	branchAt    string // the folder and status change branch was read at
-	changes     gitChanges
+	agent           agentInfo
+	session         *claudeSession
+	recap           *recap
+	current         bool      // the recap describes the conversation as it is now
+	resolvedSeq     int64     // the status change the session was last looked up at
+	resolvedAt      time.Time // when the session was last found
+	retryAt         time.Time // not before this, after a failed lookup
+	resolveFailures uint      // failed lookups in a row, for the backoff
+	resolving       bool      // looking up the session
+	recapping       bool      // a recap is being written
+	triedRecap      bool      // one has been asked for since the popup opened
+	again           bool      // the conversation moved on during a recap: write another after it
+	note            string    // why there's no recap: not Claude, nothing said yet, an error
+	branch          string    // the git branch in the agent's folder
+	branchAt        string    // the folder and status change branch was read at
+	changes         gitChanges
 }
 
 type model struct {
@@ -220,9 +236,9 @@ func (m model) loadAgents() tea.Cmd {
 }
 
 func (m model) resolve(a agentInfo) tea.Cmd {
-	src := m.src
+	src, ctx := m.src, m.ctx
 	return func() tea.Msg {
-		s, err := src.session(a)
+		s, err := src.session(ctx, a)
 		msg := sessionMsg{pane: a.PaneID, seq: a.StateChangeSeq, session: s, err: err}
 		if err == nil {
 			msg.cached, msg.current = src.cached(s)
@@ -282,6 +298,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		e.resolving = false
 		if msg.err != nil {
 			e.session, e.note = nil, sessionNote(msg.err)
+			e.resolveFailures++
+			delay := resolveRetryBase << min(e.resolveFailures-1, 4)
+			if delay > resolveRetryMax {
+				delay = resolveRetryMax
+			}
+			e.retryAt = m.now().Add(delay)
 			if msg.seq != e.agent.StateChangeSeq {
 				// It changed while being looked up: look again.
 				return m, m.startResolve(e)
@@ -293,6 +315,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		s := msg.session
 		e.session, e.note = &s, ""
+		e.resolvedAt, e.retryAt, e.resolveFailures = m.now(), time.Time{}, 0
 		if msg.cached != nil {
 			e.recap = msg.cached
 		}
@@ -408,8 +431,8 @@ func (m *model) updateAgents(agents []agentInfo, workspaces []workspaceInfo) tea
 		if kindChanged && e.note == "Recaps aren't available for this agent." {
 			e.note = ""
 		}
-		if !e.resolving && e.resolvedSeq != a.StateChangeSeq {
-			cmds = append(cmds, m.startResolve(e))
+		if cmd := m.maybeResolve(e); cmd != nil {
+			cmds = append(cmds, cmd)
 		}
 	}
 	for pane := range m.entries {
@@ -431,6 +454,33 @@ func (m *model) updateAgents(agents []agentInfo, workspaces []workspaceInfo) tea
 func (m *model) startResolve(e *entry) tea.Cmd {
 	e.resolving, e.resolvedSeq = true, e.agent.StateChangeSeq
 	return m.resolve(e.agent)
+}
+
+// maybeResolve looks an agent's session up again when it's worth it: its
+// status changed, a failed lookup's backoff has run out, or a Memex-backed
+// session is old enough that the index may have moved on (the transcript is
+// read from Memex, so its row goes stale without any status change).
+func (m *model) maybeResolve(e *entry) tea.Cmd {
+	if e.resolving {
+		return nil
+	}
+	now := m.now()
+	switch {
+	case e.resolvedSeq != e.agent.StateChangeSeq:
+		// A new status: look now, whatever the backoff said.
+		e.retryAt, e.resolveFailures = time.Time{}, 0
+	case e.session == nil:
+		if e.retryAt.IsZero() || now.Before(e.retryAt) {
+			return nil
+		}
+	case e.agent.Agent != "claude" && !e.resolvedAt.IsZero():
+		if now.Before(e.resolvedAt.Add(memexRefreshEvery)) {
+			return nil
+		}
+	default:
+		return nil
+	}
+	return m.startResolve(e)
 }
 
 func (m *model) startRecap(e *entry, force bool) tea.Cmd {
@@ -1224,7 +1274,7 @@ func debugList(cfg config) error {
 		if !recapCapable(a) {
 			continue
 		}
-		s, err := src.session(a)
+		s, err := src.session(context.Background(), a)
 		if err != nil {
 			fmt.Println("    session:", err)
 			continue

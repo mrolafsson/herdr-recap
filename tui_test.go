@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"sync"
 	"testing"
@@ -282,6 +283,67 @@ func TestAWorkingAgentIsRecappedOnceWhileOpen(t *testing.T) {
 	next, cmd := m.Update(sessionMsg{pane: "w1:p1", seq: e.agent.StateChangeSeq, session: *e.session, cached: e.recap})
 	if cmd != nil || next.(model).entries["w1:p1"].recapping {
 		t.Error("recapped a working agent again")
+	}
+}
+
+type flakySessionSource struct {
+	*demoSource
+	calls int
+}
+
+func (f *flakySessionSource) session(context.Context, agentInfo) (claudeSession, error) {
+	f.calls++
+	if f.calls == 1 {
+		return claudeSession{}, errSessionNotIndexed
+	}
+	return claudeSession{Agent: "codex", ID: codexSession, Transcript: "/x", Stamp: "v1"}, nil
+}
+
+func TestFailedMemexLookupRetriesWithBoundedBackoff(t *testing.T) {
+	src := &flakySessionSource{demoSource: newDemoSource()}
+	now := time.Date(2026, 9, 28, 12, 0, 0, 0, time.UTC)
+	m := newModel(context.Background(), src)
+	m.now = func() time.Time { return now }
+	a := agentInfo{PaneID: "w9:p1", Agent: "codex", Status: "done", StateChangeSeq: 1, AgentSession: agentSession{Kind: "id", Value: codexSession}}
+	m = settle(t, m, m.updateAgents([]agentInfo{a}, nil))
+	if src.calls != 1 {
+		t.Fatalf("initial calls: %d", src.calls)
+	}
+	m.updateAgents([]agentInfo{a}, nil)
+	if src.calls != 1 {
+		t.Fatalf("retried without backoff: %d", src.calls)
+	}
+	now = now.Add(resolveRetryBase)
+	m = settle(t, m, m.updateAgents([]agentInfo{a}, nil))
+	if src.calls != 2 || m.entries[a.PaneID].session == nil {
+		t.Fatalf("calls %d, entry %+v", src.calls, m.entries[a.PaneID])
+	}
+}
+
+type refreshingSessionSource struct {
+	*demoSource
+	calls int
+}
+
+func (r *refreshingSessionSource) session(context.Context, agentInfo) (claudeSession, error) {
+	r.calls++
+	return claudeSession{Agent: "opencode", ID: openCodeSession, Transcript: "/x", Stamp: fmt.Sprintf("v%d", r.calls)}, nil
+}
+
+func TestMemexSessionRefreshesWhileStateIsUnchanged(t *testing.T) {
+	src := &refreshingSessionSource{demoSource: newDemoSource()}
+	now := time.Date(2026, 9, 28, 12, 0, 0, 0, time.UTC)
+	m := newModel(context.Background(), src)
+	m.now = func() time.Time { return now }
+	a := agentInfo{PaneID: "w9:p2", Agent: "opencode", Status: "done", StateChangeSeq: 1, AgentSession: agentSession{Kind: "id", Value: openCodeSession}}
+	m = settle(t, m, m.updateAgents([]agentInfo{a}, nil))
+	if got := m.entries[a.PaneID].session.Stamp; got != "v1" {
+		t.Fatalf("stamp %q", got)
+	}
+	now = now.Add(memexRefreshEvery)
+	m = settle(t, m, m.updateAgents([]agentInfo{a}, nil))
+	if src.calls != 2 || m.entries[a.PaneID].session.Stamp != "v2" {
+		t.Fatalf("calls %d, session %+v", src.calls, m.entries[a.PaneID].session)
 	}
 }
 

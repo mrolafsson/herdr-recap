@@ -168,7 +168,7 @@ Optional: `config.json` in the plugin's config directory
 | `transcript_max_chars` | `24000` | Maximum recent user/assistant transcript characters sent to the summarizer |
 | `summarizer_model` | Claude default | Optional model passed to the default Claude print-mode summarizer |
 | `summarizer` | Claude print mode | Optional command argv array, for example `["my-summarizer", "--brief"]`; it reads the prompt on stdin and must print only recap text |
-| `timeout_seconds` | `120` | The longest one recap may take |
+| `timeout_seconds` | `120` | The longest one whole recap may take, covering the Memex lookup, every transcript page and the summarizer together |
 | `theme` | ask the terminal | `"dark"` or `"light"` background |
 | `tokens` | all | Which pane tokens to show, in order, e.g. `["pr"]`. By default all, less herdr-github's `pr_*` details when its `pr` is there |
 
@@ -179,7 +179,11 @@ recap, then the details, each kind in its own colour.
 
 Claude recaps are made by the same Claude Code, account and settings the agent
 uses, on its own conversation. Non-Claude recaps read a bounded page through
-Memex and send only user/assistant text to the configured summarizer. The
+Memex and send only user/assistant text to the configured summarizer, as a
+JSON string in a JSON object the summarizer is told to treat as data, so a
+transcript can't close its own delimiter and give the summarizer instructions.
+A Memex or summarizer process that floods stdout or stderr is killed and the
+recap fails rather than filling memory. The
 default summarizer is a new, non-persistent Claude print-mode request and has
 the usual Claude billing or plan cost. Recaps are kept in
 `~/.local/state/herdr/plugins/herdr-recap/recaps/`, readable only by you.
