@@ -127,8 +127,9 @@ does straight away.
 
 ## When recaps are written
 
-Soon after a turn ends. When a Claude agent finishes (done) or stops to ask
-you something (blocked), herdr tells the plugin, which waits
+Soon after a turn ends. When a supported agent -- Claude, Codex, OpenCode, or
+Hermes -- finishes (done) or stops to ask you something (blocked), herdr tells
+the plugin, which waits
 `recap_after_seconds` (3 minutes). If by then you still haven't looked at the
 agent, its recap is written; if you have (done turns to idle) or you answered
 it, nothing is spent. So the agents you're working with cost nothing, and the
@@ -140,13 +141,20 @@ time, in the background. The rows show what's already there meanwhile.
 
 ## What it costs
 
-A recap is one short Claude request on the agent's own conversation, billed
-like any other (or counted against your plan). Written soon after the turn,
-it reuses the agent's prompt cache: in testing, about 2¢ at list price on a
-~70k-token conversation, and a few cents on bigger ones. Once the cache has
-expired (5 minutes by default, an hour on some plans) the whole conversation
-is read again, which costs several times more. That's why the wait is 3
-minutes: keep `recap_after_seconds` under your cache's lifetime.
+Native Claude recaps are one short Claude request on the agent's own
+conversation, billed like any other (or counted against your plan). Written
+soon after the turn, they reuse that session's prompt cache: in testing, about
+2¢ at list price on a ~70k-token conversation, and a few cents on bigger ones.
+Once the cache has expired (5 minutes by default, an hour on some plans), the
+whole conversation is read again. Keep `recap_after_seconds` under your cache's
+lifetime when that reuse matters.
+
+Codex, OpenCode, and Hermes recaps do not reuse the agent's session cache.
+Memex reads a bounded recent transcript, then the configured summarizer handles
+it as a fresh bounded request. Measured large examples with the default Claude
+summarizer cost about $0.27-$0.29 each. That is an example, not a universal
+price: cost varies with transcript length, model, provider, plan, and custom
+`summarizer` configuration.
 
 At most one recap per agent each time you walk away from it: an agent
 sitting in done starts no new turns.

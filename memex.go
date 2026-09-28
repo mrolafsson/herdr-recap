@@ -6,11 +6,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
 	"regexp"
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 )
 
@@ -19,6 +21,7 @@ var memexSessionIDPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]{2,127}
 const (
 	commandOutputLimit = 2 << 20
 	commandErrorLimit  = 64 << 10
+	commandCleanupWait = 5 * time.Second
 )
 
 var errOutputLimit = errors.New("output limit exceeded")
@@ -83,6 +86,8 @@ func runBoundedCommand(cmd *exec.Cmd) ([]byte, string, error) {
 	stdout := &limitedBuffer{limit: commandOutputLimit, exceeded: exceeded, once: once}
 	stderr := &limitedBuffer{limit: commandErrorLimit, exceeded: exceeded, once: once}
 	cmd.Stdout, cmd.Stderr = stdout, stderr
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	cmd.Cancel = func() error { return killCommandGroup(cmd) }
 	if err := cmd.Start(); err != nil {
 		return nil, "", err
 	}
@@ -95,10 +100,31 @@ func runBoundedCommand(cmd *exec.Cmd) ([]byte, string, error) {
 		}
 		return stdout.bytesCopy(), stderr.String(), err
 	case <-exceeded:
-		_ = cmd.Process.Kill()
-		<-done
+		_ = killCommandGroup(cmd)
+		select {
+		case <-done:
+		case <-time.After(commandCleanupWait):
+		}
 		return nil, stderr.String(), errOutputLimit
 	}
+}
+
+func killCommandGroup(cmd *exec.Cmd) error {
+	if cmd.Process == nil {
+		return os.ErrProcessDone
+	}
+	err := syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+	if errors.Is(err, syscall.ESRCH) {
+		return os.ErrProcessDone
+	}
+	return err
+}
+
+func recapContext(ctx context.Context, cfg config) (context.Context, context.CancelFunc) {
+	if _, ok := ctx.Deadline(); ok {
+		return context.WithCancel(ctx)
+	}
+	return context.WithTimeout(ctx, time.Duration(cfg.TimeoutSeconds)*time.Second)
 }
 
 func supportedAgent(agent string) bool {
@@ -114,6 +140,8 @@ func recapCapable(a agentInfo) bool {
 }
 
 func resolveAgentSession(ctx context.Context, cfg config, a agentInfo) (claudeSession, error) {
+	ctx, cancel := recapContext(ctx, cfg)
+	defer cancel()
 	if a.Agent == "claude" {
 		s, err := resolveSession(a.PaneID)
 		s.Agent = "claude"
@@ -132,8 +160,6 @@ func resolveAgentSession(ctx context.Context, cfg config, a agentInfo) (claudeSe
 	if source != a.Agent {
 		return claudeSession{}, fmt.Errorf("agent session source %q does not match %q", source, a.Agent)
 	}
-	ctx, cancel := context.WithTimeout(ctx, time.Duration(cfg.TimeoutSeconds)*time.Second)
-	defer cancel()
 	out, err := runMemex(ctx, cfg, "sessions", "--source", source, "--session-id", a.AgentSession.Value,
 		"--machine", "local", "--limit", "2", "--format", "json", "--non-interactive", "--no-update-check")
 	if err != nil {
@@ -286,7 +312,7 @@ var runSummaryCommand = func(ctx context.Context, cfg config, s claudeSession, p
 }
 
 func runMemexRecap(ctx context.Context, cfg config, s claudeSession) (recap, error) {
-	ctx, cancel := context.WithTimeout(ctx, time.Duration(cfg.TimeoutSeconds)*time.Second)
+	ctx, cancel := recapContext(ctx, cfg)
 	defer cancel()
 	conversation, err := memexTranscript(ctx, cfg, s)
 	if err != nil {

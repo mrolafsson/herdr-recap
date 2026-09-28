@@ -125,6 +125,8 @@ func runRecapCommand(ctx context.Context, cfg config, args []string) error {
 		}
 		return recapLater(ctx, cfg, time.Duration(*after)*time.Second, *seq, pane)
 	}
+	ctx, cancel := recapContext(ctx, cfg)
+	defer cancel()
 	// Preserve Claude's process-based resolver. Only consult agent.list when
 	// the pane is not Claude and needs Memex metadata.
 	s, err := resolveSession(pane)

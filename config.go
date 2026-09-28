@@ -11,8 +11,8 @@ import (
 type config struct {
 	// RecapAfterSeconds is how long an agent has to sit finished (done) or
 	// waiting on you (blocked) without you looking before its recap is
-	// written. Short glances away cost nothing. Past the prompt cache's
-	// lifetime (5 minutes by default) each recap costs several times more.
+	// written. Short glances away cost nothing. Native Claude recaps can reuse
+	// the session cache when this stays below that cache's lifetime.
 	RecapAfterSeconds int `json:"recap_after_seconds"`
 	// Claude is the claude binary recaps run with. Empty = the one the agent
 	// runs, or "claude" on PATH.

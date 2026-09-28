@@ -5,7 +5,11 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
+	"os/exec"
+	"path/filepath"
+	"strconv"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -33,6 +37,7 @@ func TestSummaryPromptEncodesUntrustedConversationAsJSON(t *testing.T) {
 }
 
 func TestMemexRecapUsesOneDeadlineForAllPagesAndSummary(t *testing.T) {
+	t.Setenv("HERDR_PLUGIN_STATE_DIR", t.TempDir())
 	oldMemex, oldSummary := runMemex, runSummaryCommand
 	var deadlines []time.Time
 	runMemex = func(ctx context.Context, _ config, _ ...string) ([]byte, error) {
@@ -64,6 +69,46 @@ func TestMemexRecapUsesOneDeadlineForAllPagesAndSummary(t *testing.T) {
 	}
 }
 
+func TestResolveAndRecapKeepCallersDeadline(t *testing.T) {
+	t.Setenv("HERDR_PLUGIN_STATE_DIR", t.TempDir())
+	oldMemex, oldSummary := runMemex, runSummaryCommand
+	var deadlines []time.Time
+	runMemex = func(ctx context.Context, _ config, args ...string) ([]byte, error) {
+		deadline, ok := ctx.Deadline()
+		if !ok {
+			t.Fatal("memex call has no deadline")
+		}
+		deadlines = append(deadlines, deadline)
+		if args[0] == "sessions" {
+			return []byte(`[{"source":"codex","session_id":"` + codexSession + `","source_path":"/sessions/a.jsonl","cwd":"/repo","last_at":"now","message_count":1}]`), nil
+		}
+		return []byte(`[{"record":{"role":"user","text":"question"}}]`), nil
+	}
+	runSummaryCommand = func(ctx context.Context, _ config, _ claudeSession, _ string) ([]byte, error) {
+		deadline, ok := ctx.Deadline()
+		if !ok {
+			t.Fatal("summary call has no deadline")
+		}
+		deadlines = append(deadlines, deadline)
+		return []byte(`{"result":"done"}`), nil
+	}
+	t.Cleanup(func() { runMemex, runSummaryCommand = oldMemex, oldSummary })
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	a := agentInfo{Agent: "codex", AgentSession: agentSession{Source: "herdr:codex", Kind: "id", Value: codexSession}}
+	s, err := resolveAgentSession(ctx, config{TimeoutSeconds: 30}, a)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := ensureRecap(ctx, config{TimeoutSeconds: 30}, s, false); err != nil {
+		t.Fatal(err)
+	}
+	if len(deadlines) != 3 || !deadlines[0].Equal(deadlines[1]) || !deadlines[0].Equal(deadlines[2]) {
+		t.Fatalf("deadlines differ: %v", deadlines)
+	}
+}
+
 func TestMemexAndSummarizerOutputIsBounded(t *testing.T) {
 	if os.Getenv("RECAP_OUTPUT_FLOOD") != "" {
 		chunk := strings.Repeat("x", 32*1024)
@@ -83,6 +128,51 @@ func TestMemexAndSummarizerOutputIsBounded(t *testing.T) {
 	if _, err := runSummaryCommand(ctx, cfg, claudeSession{}, "prompt"); err == nil || !strings.Contains(err.Error(), "output limit") {
 		t.Fatalf("summary error: %v", err)
 	}
+}
+
+func TestBoundedCommandKillsDescendantsOnOverflow(t *testing.T) {
+	assertBoundedCommandKillsDescendant(t, true)
+}
+
+func TestBoundedCommandKillsDescendantsOnCancellation(t *testing.T) {
+	assertBoundedCommandKillsDescendant(t, false)
+}
+
+func assertBoundedCommandKillsDescendant(t *testing.T, overflow bool) {
+	t.Helper()
+	pidFile := filepath.Join(t.TempDir(), "child.pid")
+	script := `sleep 30 & child=$!; printf %s "$child" > "$1"; `
+	if overflow {
+		script += `while :; do printf '%032768d' 0; done`
+	} else {
+		script += `wait "$child"`
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "sh", "-c", script, "sh", pidFile)
+	_, _, err := runBoundedCommand(cmd)
+	if overflow && !errors.Is(err, errOutputLimit) {
+		t.Fatalf("got %v", err)
+	}
+	if !overflow && err == nil {
+		t.Fatal("canceled command succeeded")
+	}
+	data, readErr := os.ReadFile(pidFile)
+	if readErr != nil {
+		t.Fatal(readErr)
+	}
+	pid, convErr := strconv.Atoi(string(data))
+	if convErr != nil {
+		t.Fatal(convErr)
+	}
+	for range 50 {
+		if err := syscall.Kill(pid, 0); errors.Is(err, syscall.ESRCH) {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	_ = syscall.Kill(pid, syscall.SIGKILL)
+	t.Fatalf("descendant %d survived command cleanup", pid)
 }
 
 func TestResolveMemexSessionsFromHerdrMetadata(t *testing.T) {

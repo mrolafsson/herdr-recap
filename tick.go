@@ -135,6 +135,8 @@ func recapLater(ctx context.Context, cfg config, after time.Duration, seq int64,
 	if now == nil || now.StateChangeSeq != seq || !waiting(*now) {
 		return nil
 	}
+	ctx, cancel := recapContext(ctx, cfg)
+	defer cancel()
 	s, err := sessionOf(ctx, cfg, *now)
 	if err != nil {
 		return err

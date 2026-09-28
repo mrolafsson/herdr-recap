@@ -249,6 +249,11 @@ func (m model) resolve(a agentInfo) tea.Cmd {
 
 func (m model) recapCmd(pane string, s claudeSession, force bool) tea.Cmd {
 	src, ctx, sem := m.src, m.ctx, m.sem
+	if force {
+		// A manual rewrite is a new operation, not part of the session lookup
+		// that originally populated this row.
+		s.Deadline = time.Time{}
+	}
 	return func() tea.Msg {
 		select {
 		case sem <- struct{}{}:
@@ -346,6 +351,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		again := e.again
 		e.again = false
 		if e.session != nil && e.session.ID == msg.session {
+			e.session.Deadline = time.Time{}
 			switch {
 			case errors.Is(msg.err, errNothingYet):
 				e.note = "Nothing to recap yet."
