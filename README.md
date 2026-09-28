@@ -75,9 +75,11 @@ there.
 - **herdr 0.9.0** or later.
 - **Claude Code** with `/recap` (2.1.x), signed in. Claude sessions keep their
   native `/recap` path.
-- **Memex 0.24.0** or later for Codex, OpenCode, and Hermes recaps. Memex must
-  have indexed the session. Claude Code print mode summarizes the bounded
-  Memex transcript by default; `summarizer` can replace it.
+- **Memex 0.24.0** or later for Codex and OpenCode recaps. Hermes recaps
+  require [nicosuave/memex#220](https://github.com/nicosuave/memex/pull/220),
+  or a later Memex release containing it. Memex must have indexed the session.
+  Claude Code print mode summarizes the bounded Memex transcript by default;
+  `summarizer` can replace it.
 - **Linux** or **macOS**, on arm64 or x86-64.
 
 ## Install
