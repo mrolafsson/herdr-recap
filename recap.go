@@ -19,6 +19,8 @@ import (
 // hasn't changed since.
 type recap struct {
 	Session string    `json:"session"`
+	Source  string    `json:"source,omitempty"`
+	Stamp   string    `json:"stamp,omitempty"`
 	Text    string    `json:"text"`
 	At      time.Time `json:"at"`
 	Size    int64     `json:"size"`
@@ -78,6 +80,9 @@ func fresh(r *recap, s claudeSession) bool {
 	if r == nil {
 		return false
 	}
+	if s.Agent != "" && s.Agent != "claude" {
+		return r.Source == s.Agent && r.Stamp != "" && r.Stamp == s.Stamp
+	}
 	size, mod := transcriptStamp(s.Transcript)
 	return r.Size == size && r.ModTime.Equal(mod)
 }
@@ -90,11 +95,13 @@ var errNothingYet = errors.New("nothing to recap yet")
 // at a time: a second caller waits for the first and takes its result rather
 // than paying twice, unless it forces, when it gets a new one after.
 func ensureRecap(ctx context.Context, cfg config, s claudeSession, force bool) (r recap, ran bool, err error) {
+	ctx, cancel := recapContext(ctx, cfg)
+	defer cancel()
 	if s.Transcript == "" {
 		return recap{}, false, errNothingYet
 	}
 	started := time.Now()
-	unlock, err := lockSession(s.ID)
+	unlock, err := lockSession(ctx, s.ID)
 	if err != nil {
 		return recap{}, false, err
 	}
@@ -112,7 +119,7 @@ func ensureRecap(ctx context.Context, cfg config, s claudeSession, force bool) (
 }
 
 // lockSession holds the session's lock file until unlock is called.
-func lockSession(id string) (func(), error) {
+func lockSession(ctx context.Context, id string) (func(), error) {
 	if err := os.MkdirAll(recapDir(), 0o700); err != nil {
 		return nil, err
 	}
@@ -120,9 +127,21 @@ func lockSession(id string) (func(), error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX); err != nil {
-		f.Close()
-		return nil, err
+	for {
+		err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB)
+		if err == nil {
+			break
+		}
+		if err != syscall.EWOULDBLOCK && err != syscall.EAGAIN {
+			f.Close()
+			return nil, err
+		}
+		select {
+		case <-ctx.Done():
+			f.Close()
+			return nil, ctx.Err()
+		case <-time.After(10 * time.Millisecond):
+		}
 	}
 	return func() {
 		_ = syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
@@ -162,8 +181,6 @@ func recapEnv(s claudeSession) []string {
 
 // runCommand runs the recap; a variable so tests can stand one in.
 var runCommand = func(ctx context.Context, cfg config, s claudeSession) ([]byte, error) {
-	ctx, cancel := context.WithTimeout(ctx, time.Duration(cfg.TimeoutSeconds)*time.Second)
-	defer cancel()
 	cmd := exec.CommandContext(ctx, claudeBinary(cfg, s), recapArgs(s.ID)...)
 	cmd.Dir, cmd.Env = s.Cwd, recapEnv(s)
 	// Past the timeout, don't wait on pipes a hook's child may still hold:
@@ -194,6 +211,9 @@ func claudeBinary(cfg config, s claudeSession) string {
 }
 
 func runRecap(ctx context.Context, cfg config, s claudeSession) (recap, error) {
+	if s.Agent != "" && s.Agent != "claude" {
+		return runMemexRecap(ctx, cfg, s)
+	}
 	out, err := runCommand(ctx, cfg, s)
 	if err != nil {
 		return recap{}, err
