@@ -15,11 +15,11 @@ import (
 // waiting is a status that leaves an agent sitting until you come back to it:
 // finished and not yet looked at (done), or asking you something (blocked).
 func waiting(a agentInfo) bool {
-	return a.Agent == "claude" && (a.Status == "done" || a.Status == "blocked")
+	return recapCapable(a) && (a.Status == "done" || a.Status == "blocked")
 }
 
 // tick runs on every agent status change (and at startup). It only reads the
-// agent list: for each Claude agent that is now waiting on you it starts a
+// agent list: for each supported agent that is now waiting on you it starts a
 // detached `recap --after` to write its recap later, if you haven't looked by
 // then. A status change is one agent's, so only that agent is considered;
 // with no event (startup, by hand), every agent is.
@@ -94,7 +94,9 @@ var spawn = func(args ...string) error {
 // The worker's view of herdr, variables so tests can stand them in.
 var (
 	agentsNow = listAgents
-	sessionOf = resolveSession
+	sessionOf = func(ctx context.Context, cfg config, a agentInfo) (claudeSession, error) {
+		return resolveAgentSession(ctx, cfg, a)
+	}
 )
 
 // pruneScheduled forgets marks old enough that their recap has long since run
@@ -133,7 +135,7 @@ func recapLater(ctx context.Context, cfg config, after time.Duration, seq int64,
 	if now == nil || now.StateChangeSeq != seq || !waiting(*now) {
 		return nil
 	}
-	s, err := sessionOf(paneID)
+	s, err := sessionOf(ctx, cfg, *now)
 	if err != nil {
 		return err
 	}

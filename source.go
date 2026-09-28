@@ -10,8 +10,8 @@ type source interface {
 	// agents is every agent herdr knows, with its workspaces' names in
 	// sidebar order.
 	agents() ([]agentInfo, []workspaceInfo, error)
-	// session finds the Claude session in a pane.
-	session(paneID string) (claudeSession, error)
+	// session finds the coding agent session in a pane.
+	session(agentInfo) (claudeSession, error)
 	// cached is the session's cached recap, if any, and whether it still
 	// describes the conversation.
 	cached(s claudeSession) (*recap, bool)
@@ -34,9 +34,9 @@ func (liveSource) agents() ([]agentInfo, []workspaceInfo, error) {
 	return agents, listWorkspaces(), nil
 }
 
-func (liveSource) session(paneID string) (claudeSession, error) {
-	s, err := resolveSession(paneID)
-	if err == nil {
+func (l liveSource) session(a agentInfo) (claudeSession, error) {
+	s, err := resolveAgentSession(context.Background(), l.cfg, a)
+	if err == nil && (s.Agent == "" || s.Agent == "claude") {
 		s.Meta = readMeta(s.Transcript)
 	}
 	return s, err

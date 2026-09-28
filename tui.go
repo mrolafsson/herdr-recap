@@ -30,7 +30,7 @@ type agentsMsg struct {
 // pollMsg re-reads the agents, so statuses stay live while the popup is open.
 type pollMsg struct{}
 
-// sessionMsg is a pane's Claude session, found for the status change seq.
+// sessionMsg is a pane's agent session, found for the status change seq.
 type sessionMsg struct {
 	pane    string
 	seq     int64
@@ -222,7 +222,7 @@ func (m model) loadAgents() tea.Cmd {
 func (m model) resolve(a agentInfo) tea.Cmd {
 	src := m.src
 	return func() tea.Msg {
-		s, err := src.session(a.PaneID)
+		s, err := src.session(a)
 		msg := sessionMsg{pane: a.PaneID, seq: a.StateChangeSeq, session: s, err: err}
 		if err == nil {
 			msg.cached, msg.current = src.cached(s)
@@ -378,7 +378,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 // updateAgents takes a fresh agent list: new agents get a row, gone ones lose
-// theirs, and a Claude agent whose status changed has its session looked up
+// theirs, and an agent whose status changed has its session looked up
 // again (it may be a new conversation, and its recap out of date).
 func (m *model) updateAgents(agents []agentInfo, workspaces []workspaceInfo) tea.Cmd {
 	selected := m.selectedPane()
@@ -401,11 +401,11 @@ func (m *model) updateAgents(agents []agentInfo, workspaces []workspaceInfo) tea
 			src, pane, cwd := m.src, a.PaneID, a.Cwd
 			cmds = append(cmds, func() tea.Msg { return changesMsg{pane, at, src.changes(cwd)} })
 		}
-		if a.Agent != "claude" {
-			e.session, e.recap, e.note = nil, nil, "Recaps are for Claude agents."
+		if !recapCapable(a) {
+			e.session, e.recap, e.note = nil, nil, "Recaps aren't available for this agent."
 			continue
 		}
-		if kindChanged && e.note == "Recaps are for Claude agents." {
+		if kindChanged && e.note == "Recaps aren't available for this agent." {
 			e.note = ""
 		}
 		if !e.resolving && e.resolvedSeq != a.StateChangeSeq {
@@ -1221,15 +1221,15 @@ func debugList(cfg config) error {
 	}
 	for _, a := range agents {
 		fmt.Printf("%s  %-8s %-7s %s\n", a.PaneID, a.Status, a.Agent, title(a))
-		if a.Agent != "claude" {
+		if !recapCapable(a) {
 			continue
 		}
-		s, err := src.session(a.PaneID)
+		s, err := src.session(a)
 		if err != nil {
 			fmt.Println("    session:", err)
 			continue
 		}
-		fmt.Printf("    session %s  config %s\n    transcript %s\n", s.ID, s.ConfigDir, s.Transcript)
+		fmt.Printf("    session %s  source %s  config %s\n    transcript %s\n", s.ID, s.Agent, s.ConfigDir, s.Transcript)
 		mt := s.Meta
 		c := readChanges(a.Cwd)
 		fmt.Printf("    branch %q (folder %q)  model %s  mode %q  tasks %d/%d  changes %+v\n",

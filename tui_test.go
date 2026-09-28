@@ -83,7 +83,7 @@ func TestOutOfDateRecapsAreRewrittenOnOpen(t *testing.T) {
 
 func TestRowsSayWhyThereIsNoRecap(t *testing.T) {
 	m, _ := demoModel(t)
-	if e := m.entries["w2:p3"]; e.note != "Recaps are for Claude agents." {
+	if e := m.entries["w2:p3"]; e.note != "Recaps aren't available for this agent." {
 		t.Errorf("codex: %q", e.note)
 	}
 	if e := m.entries["w3:p4"]; e.note != "Nothing to recap yet." || e.recapping {
@@ -103,7 +103,7 @@ func TestTheViewShowsStatusTitleAndRecap(t *testing.T) {
 		"settings-dark-mode · 14 files +530 −121 · 3/7 tasks", "main · ↑1", "codex · #415",
 		"opus 5.5 · acceptEdits",
 		"● Flaky checkout e2e test", "✓ Release notes for 2.4",
-		"scratch", "Nothing to recap yet.", "Recaps are for Claude agents.",
+		"scratch", "Nothing to recap yet.", "Recaps aren't available for this agent.",
 		"enter go to agent · r reply · ^r recap again · esc close",
 	} {
 		if !strings.Contains(v, want) {

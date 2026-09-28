@@ -73,9 +73,11 @@ there.
 ## Requirements
 
 - **herdr 0.9.0** or later.
-- **Claude Code** with `/recap` (2.1.x), signed in. Recaps and the details
-  from the conversation are Claude-only; other agents are listed with their
-  status, title, branch and changes.
+- **Claude Code** with `/recap` (2.1.x), signed in. Claude sessions keep their
+  native `/recap` path.
+- **Memex 0.24.0** or later for Codex, OpenCode, and Hermes recaps. Memex must
+  have indexed the session. Claude Code print mode summarizes the bounded
+  Memex transcript by default; `summarizer` can replace it.
 - **Linux** or **macOS**, on arm64 or x86-64.
 
 ## Install
@@ -161,7 +163,11 @@ Optional: `config.json` in the plugin's config directory
 | Key | Default | Meaning |
 | --- | --- | --- |
 | `recap_after_seconds` | `180` | How long an agent waits on you, unlooked at, before its recap is written |
-| `claude` | the agent's own | The Claude Code binary to run recaps with. By default the one the agent runs, found on the agent's PATH (herdr's own PATH often lacks `~/.local/bin`) |
+| `claude` | the agent's own | Claude Code binary for native Claude recaps and the default non-Claude summarizer |
+| `memex` | `"memex"` | Memex binary used to resolve and read Codex, OpenCode, and Hermes sessions |
+| `transcript_max_chars` | `24000` | Maximum recent user/assistant transcript characters sent to the summarizer |
+| `summarizer_model` | Claude default | Optional model passed to the default Claude print-mode summarizer |
+| `summarizer` | Claude print mode | Optional command argv array, for example `["my-summarizer", "--brief"]`; it reads the prompt on stdin and must print only recap text |
 | `timeout_seconds` | `120` | The longest one recap may take |
 | `theme` | ask the terminal | `"dark"` or `"light"` background |
 | `tokens` | all | Which pane tokens to show, in order, e.g. `["pr"]`. By default all, less herdr-github's `pr_*` details when its `pr` is there |
@@ -171,15 +177,18 @@ recap, then the details, each kind in its own colour.
 
 ## Privacy
 
-Recaps are made by the same Claude Code, account and settings the agent uses,
-on its own conversation, so nothing goes anywhere it hadn't already. They're
-kept in `~/.local/state/herdr/plugins/herdr-recap/recaps/`, one small file
-per session, readable only by you.
+Claude recaps are made by the same Claude Code, account and settings the agent
+uses, on its own conversation. Non-Claude recaps read a bounded page through
+Memex and send only user/assistant text to the configured summarizer. The
+default summarizer is a new, non-persistent Claude print-mode request and has
+the usual Claude billing or plan cost. Recaps are kept in
+`~/.local/state/herdr/plugins/herdr-recap/recaps/`, readable only by you.
 
-The recap is a fork of the conversation that is never saved: the agent's own
-session isn't written to, and it doesn't show up in `claude --resume`. It
-does run with your Claude Code settings, so your own hooks (a notification on
-stop, say) run for it too.
+A native Claude recap is a fork of the conversation that is never saved: the
+agent's own session isn't written to, and it doesn't show up in
+`claude --resume`. It does run with your Claude Code settings, so your own hooks
+(a notification on stop, say) run for it too. A default non-Claude recap is a
+separate print-mode Claude request, also with session persistence disabled.
 
 ## Troubleshooting
 
@@ -214,7 +223,7 @@ profile switcher (clauth and the like) can name a different session: the
 process's `CLAUDE_CONFIG_DIR` (from `/proc` on Linux, `ps` on macOS) leads
 to `sessions/<pid>.json`, which names the session and where it was started.
 
-The rest of a row comes from the end of the session's transcript: the last
+For Claude, the rest of a row comes from the end of the session's transcript: the last
 tool call without a result (what a blocked agent is asking), its task list,
 branch, model, mode, your last prompt, and when each happened. Changes come
 from `git status` and `git diff --shortstat` in the agent's folder, read
@@ -231,6 +240,14 @@ herdr's environment (so herdr's own Claude hooks don't mistake it for an
 agent). It's cached with the transcript's size and time, and counts as
 current until the transcript changes. One recap per session runs at a time:
 another asking for the same one waits and takes its result.
+
+For Codex, OpenCode, and Hermes, herdr's exact `agent_session.value` and source
+are matched with `memex sessions`. The plugin then reads recent records with a
+bounded `memex session --source-path ... --limit 500 --max-chars ...` request,
+keeps only user and assistant text, and treats that text as untrusted data in
+the summarizer prompt. Lifecycle, system/developer, tool-call, and tool-result
+bodies are excluded. Cache freshness uses Memex's last activity and message
+count instead of the shared database file timestamp.
 
 The `pane.agent_status_changed` hook (`tick`) only reads the agent list and
 starts a detached `recap --after` for an agent now waiting on you, once per

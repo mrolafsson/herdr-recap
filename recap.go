@@ -19,6 +19,8 @@ import (
 // hasn't changed since.
 type recap struct {
 	Session string    `json:"session"`
+	Source  string    `json:"source,omitempty"`
+	Stamp   string    `json:"stamp,omitempty"`
 	Text    string    `json:"text"`
 	At      time.Time `json:"at"`
 	Size    int64     `json:"size"`
@@ -77,6 +79,9 @@ func transcriptStamp(path string) (int64, time.Time) {
 func fresh(r *recap, s claudeSession) bool {
 	if r == nil {
 		return false
+	}
+	if s.Agent != "" && s.Agent != "claude" {
+		return r.Source == s.Agent && r.Stamp != "" && r.Stamp == s.Stamp
 	}
 	size, mod := transcriptStamp(s.Transcript)
 	return r.Size == size && r.ModTime.Equal(mod)
@@ -194,6 +199,9 @@ func claudeBinary(cfg config, s claudeSession) string {
 }
 
 func runRecap(ctx context.Context, cfg config, s claudeSession) (recap, error) {
+	if s.Agent != "" && s.Agent != "claude" {
+		return runMemexRecap(ctx, cfg, s)
+	}
 	out, err := runCommand(ctx, cfg, s)
 	if err != nil {
 		return recap{}, err
