@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.1.2 — 2026-09-28
 
 - Rows keep their height when selected: the selected agent's last prompt,
   model and mode are on the line above the footer instead of in its row, so
