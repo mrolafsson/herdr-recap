@@ -404,6 +404,11 @@ func TestTokenValues(t *testing.T) {
 	if got := tokenValues(map[string]string{"pr_state": "open"}, nil); len(got) != 1 {
 		t.Errorf("pr details without a pr are shown: %q", got)
 	}
+	// herdr-github's prs has the PR, its state and the others: it's said once.
+	tokens = map[string]string{"pr": "#148", "pr_badge": "#148 merged", "pr_state": "merged", "prs": "#148 merged", "clauth": "tvh"}
+	if got := strings.Join(tokenValues(tokens, nil), " · "); got != "tvh · #148 merged" {
+		t.Errorf("a PR is there twice: %q", got)
+	}
 }
 
 // replySource records replies, and refuses them for a blocked agent.

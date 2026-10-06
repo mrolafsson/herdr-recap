@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- A PR from herdr-github is on a row once (*#148 merged*), not twice
+  (*#148 · #148 merged*): its `prs` token stands for `pr` as well as the
+  `pr_*` details.
+
 ## 0.2.0 - 2026-10-06
 
 - Type to filter the list, as in herdr-github and herdr-linear: every word

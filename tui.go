@@ -1159,15 +1159,18 @@ func duration(d time.Duration) string {
 }
 
 // tokenValues are a pane's tokens to show, as values: the ones named in
-// config.json in that order, or else all of them by name, less herdr-github's
-// pr_* details when its pr is there (the pr says it).
+// config.json in that order, or else all of them by name. herdr-github says
+// a PR at several lengths, and the fullest there is enough: prs (the PR with
+// its state and checks, and any others the agent opened) for pr and the pr_*
+// details, or else pr for the details.
 func tokenValues(tokens map[string]string, only []string) []string {
 	var names []string
 	if len(only) > 0 {
 		names = only
 	} else {
+		pr, prs := tokens["pr"] != "", tokens["prs"] != ""
 		for k := range tokens {
-			if strings.HasPrefix(k, "pr_") && tokens["pr"] != "" {
+			if (k == "pr" && prs) || (strings.HasPrefix(k, "pr_") && (pr || prs)) {
 				continue
 			}
 			names = append(names, k)

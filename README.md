@@ -170,7 +170,7 @@ Optional: `config.json` in the plugin's config directory
 | `claude` | the agent's own | The Claude Code binary to run recaps with. By default the one the agent runs, found on the agent's PATH (herdr's own PATH often lacks `~/.local/bin`) |
 | `timeout_seconds` | `120` | The longest one recap may take |
 | `theme` | ask the terminal | `"dark"` or `"light"` background |
-| `tokens` | all | Which pane tokens to show, in order, e.g. `["pr"]`. By default all, less herdr-github's `pr_*` details when its `pr` is there |
+| `tokens` | all | Which pane tokens to show, in order, e.g. `["pr"]`. By default all, with a PR from herdr-github said once: its `prs` (state, checks and the agent's other PRs), or else its `pr`, without the `pr_*` details |
 
 Colours come from herdr's theme: the title in its brightest text, then the
 recap, then the details, each kind in its own colour.

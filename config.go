@@ -22,7 +22,8 @@ type config struct {
 	// Theme: "dark", "light", or empty to ask the terminal.
 	Theme string `json:"theme"`
 	// Tokens names the pane tokens to show under a title, in order. Empty =
-	// all of them, less the pr_* details when there's a pr.
+	// all of them, with a PR said once: prs, or else pr, without the pr_*
+	// details.
 	Tokens []string `json:"tokens"`
 }
 
