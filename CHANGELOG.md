@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.0 - 2026-10-06
 
 - Type to filter the list, as in herdr-github and herdr-linear: every word
   must match somewhere in an agent's row (its title, status, space, branch,
