@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.1 - 2026-10-06
 
 - A PR from herdr-github is on a row once (*#148 merged*), not twice
   (*#148 · #148 merged*): its `prs` token stands for `pr` as well as the
