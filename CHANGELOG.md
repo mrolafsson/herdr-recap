@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.3.0 - 2026-10-06
 
 - **One look, shared with herdr-github and herdr-linear.** A title, a
   branch, a pull request, an agent and a key are drawn the same in all three
