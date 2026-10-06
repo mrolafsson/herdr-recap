@@ -42,7 +42,7 @@ func TestWriteDemoScreens(t *testing.T) {
 	save("agents", m)
 
 	// Answering one without leaving the list.
-	reply := typeText(press(m, "down"), "r")
+	reply := press(press(m, "down"), "tab")
 	reply = typeText(reply, "looks good, but before you push:")
 	next, _ := reply.Update(tea.KeyMsg{Type: tea.KeyEnter, Alt: true})
 	reply = typeText(next.(model), "squash the fixup commits and open the PR as a draft")
@@ -54,6 +54,8 @@ func press(m model, k string) model {
 	switch k {
 	case "down":
 		msg = tea.KeyMsg{Type: tea.KeyDown}
+	case "tab":
+		msg = tea.KeyMsg{Type: tea.KeyTab}
 	default:
 		msg = tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(k)}
 	}

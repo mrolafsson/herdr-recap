@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+- Type to filter the list, as in herdr-github and herdr-linear: every word
+  must match somewhere in an agent's row (its title, status, space, branch,
+  recap, what it's waiting for or a token). `esc` clears the filter, then
+  closes.
+- With letters going to the filter, reply is `tab` (was `r`), and `k` `j`,
+  `g` `G` and `q` no longer move or close: use the arrows or `ctrl+p`
+  `ctrl+n`, `home` `end`, and `esc`.
+
 ## 0.1.2 — 2026-09-28
 
 - Rows keep their height when selected: the selected agent's last prompt,

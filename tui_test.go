@@ -104,7 +104,7 @@ func TestTheViewShowsStatusTitleAndRecap(t *testing.T) {
 		"opus 5.5 · acceptEdits",
 		"● Flaky checkout e2e test", "✓ Release notes for 2.4",
 		"scratch", "Nothing to recap yet.", "Recaps are for Claude agents.",
-		"enter go to agent · r reply · ^r recap again · esc close",
+		"enter go to agent · tab reply · ^r recap again · esc close",
 	} {
 		if !strings.Contains(v, want) {
 			t.Errorf("view lacks %q:\n%s", want, v)
@@ -436,11 +436,11 @@ func TestReplyToAnAgent(t *testing.T) {
 	m.width, m.height = 100, 40
 	m = settle(t, m, m.loadAgents())
 	m.cursor = 1 // done: Flaky checkout e2e test
-	m = typeText(m, "r")
+	m = press(m, "tab")
 	if v := ansi.Strip(m.View()); !m.replying || !strings.Contains(v, "Reply to Flaky checkout e2e test:") || !strings.Contains(v, " ›  ") {
-		t.Fatal("r didn't open the reply line")
+		t.Fatal("tab didn't open the reply line")
 	}
-	// Keys go to the reply, not the list: j types a j.
+	// Keys go to the reply, not the filter.
 	m = typeText(m, "just push it")
 	next, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	m = settle(t, next.(model), cmd)
@@ -451,7 +451,7 @@ func TestReplyToAnAgent(t *testing.T) {
 		t.Errorf("flash %q", m.flash)
 	}
 	// Esc drops a reply unsent.
-	m = typeText(m, "r")
+	m = press(m, "tab")
 	m = typeText(m, "never mind")
 	next, _ = m.Update(tea.KeyMsg{Type: tea.KeyEsc})
 	if m = next.(model); m.replying || len(src.sent) != 1 {
@@ -459,12 +459,58 @@ func TestReplyToAnAgent(t *testing.T) {
 	}
 	// A blocked agent can't take a prompt: it says to go and answer.
 	m.cursor = 0
-	m = typeText(m, "r")
+	m = press(m, "tab")
 	m = typeText(m, "yes")
 	next, cmd = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	m = settle(t, next.(model), cmd)
 	if !strings.Contains(m.err, "waiting on a question or approval") {
 		t.Errorf("err %q", m.err)
+	}
+}
+
+func TestTypingFiltersTheList(t *testing.T) {
+	m, _ := demoModel(t)
+	all := paneOrder(m)
+	m.cursor = 2
+	// Every word must be somewhere in the row: here the title and the status.
+	m = typeText(m, "dark working")
+	if got := paneOrder(m); got != "w1:p1" || m.cursor != 0 {
+		t.Fatalf("order %s, cursor %d", got, m.cursor)
+	}
+	if v := ansi.Strip(m.View()); !strings.Contains(v, " › dark working") || strings.Contains(v, "Release notes") || !strings.Contains(v, "esc clear") {
+		t.Errorf("view:\n%s", v)
+	}
+	// It lasts across herdr's next list of agents.
+	if m = settle(t, m, m.loadAgents()); paneOrder(m) != "w1:p1" {
+		t.Errorf("after a poll: %s", paneOrder(m))
+	}
+	m = typeText(m, " nope")
+	if v := ansi.Strip(m.View()); len(m.order) != 0 || !strings.Contains(v, "Nothing matches.") {
+		t.Errorf("view:\n%s", v)
+	}
+	// Esc clears the filter first, and only then closes.
+	next, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	if m = next.(model); cmd != nil || m.filter.Value() != "" || paneOrder(m) != all {
+		t.Fatalf("esc: filter %q, order %s", m.filter.Value(), paneOrder(m))
+	}
+	if _, cmd = m.Update(tea.KeyMsg{Type: tea.KeyEsc}); cmd == nil || cmd() != tea.Quit() {
+		t.Error("esc with no filter didn't close")
+	}
+}
+
+func TestTheFilterMatchesWhatARowShows(t *testing.T) {
+	for q, want := range map[string]string{
+		"needs you":     "w2:p1",       // a blocked agent, as the header puts it
+		"codex":         "w2:p3",       // the kind of agent
+		"#415":          "w2:p3",       // a token
+		"SETTINGS-dark": "w1:p1",       // the branch, in any case
+		"upgrade":       "w3:p2",       // the recap
+		"docs":          "w3:p2 w3:p4", // the space
+	} {
+		m, _ := demoModel(t)
+		if got := paneOrder(typeText(m, q)); got != want {
+			t.Errorf("%q lists %s, want %s", q, got, want)
+		}
 	}
 }
 
@@ -505,7 +551,7 @@ func TestAReplyCanRunToSeveralLines(t *testing.T) {
 	m.width, m.height = 100, 30
 	m = settle(t, m, m.loadAgents())
 	m.cursor = 1
-	m = typeText(m, "r")
+	m = press(m, "tab")
 	m = typeText(m, "looks good")
 	for _, nl := range []tea.KeyMsg{{Type: tea.KeyEnter, Alt: true}, {Type: tea.KeyCtrlJ}} {
 		next, _ := m.Update(nl)
@@ -577,7 +623,7 @@ func TestARecapFinishingAfterTheConversationMovedOnIsNotCurrent(t *testing.T) {
 
 func TestTheMouseLeavesAReplyAlone(t *testing.T) {
 	m, src := focusModel(t)
-	m = typeText(m, "r")
+	m = press(m, "tab")
 	m = typeText(m, "half a thought")
 	next, cmd := m.Update(tea.MouseMsg{X: 10, Y: listTop + 1, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft})
 	m = next.(model)

@@ -50,10 +50,15 @@ Open it (`prefix+alt+r`) and read down. Each agent is a few lines:
 `enter` (or a click) goes to the agent. Recaps are written ahead of time, so
 the list is complete the moment it opens.
 
+**Type to filter.** Every word must match somewhere in the row: its title,
+status, space, branch, recap, what it's waiting for or a token. So `billing`
+finds the agents on billing, `needs you` the ones stopped on a question, and
+`dark working` the one still working on dark mode.
+
 ## Reply from the list
 
 Most of what an agent needs from you is short: *yes, go ahead*, *push it*,
-*try the other approach*. Press `r` on it, type, and `enter` sends it, as if
+*try the other approach*. Press `tab` on it, type, and `enter` sends it, as if
 you'd typed it in its pane. The popup stays open, so you can go down the list
 answering each in turn.
 
@@ -110,12 +115,13 @@ agents: no Claude calls, safe to screenshot.
 
 | Key | Does |
 | --- | --- |
-| `↑` `↓`, `k` `j`, `ctrl+p` `ctrl+n` | move |
-| `pgup` / `pgdn`, `g` / `G` | page, first / last |
+| typing | filter |
+| `↑` `↓`, `ctrl+p` `ctrl+n` | move |
+| `pgup` / `pgdn`, `home` / `end` | page, first / last |
 | `enter`, click | go to that agent and close |
-| `r` | reply to that agent: type, then `enter` to send, `esc` to drop it; `alt+enter` or `ctrl+j` for a new line |
+| `tab` | reply to that agent: type, then `enter` to send, `esc` to drop it; `alt+enter` or `ctrl+j` for a new line |
 | `ctrl+r` | write that agent's recap again, now |
-| `esc`, `q` | close |
+| `esc` | clear the filter, then close |
 
 The footer's hints are buttons too.
 

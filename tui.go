@@ -14,6 +14,7 @@ import (
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/textarea"
+	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
@@ -158,7 +159,8 @@ type model struct {
 	width      int
 	height     int
 	entries    map[string]*entry
-	order      []string // pane IDs, as listed
+	order      []string // pane IDs, as listed: the ones the filter matches
+	filter     textinput.Model
 	workspaces []workspaceInfo
 	cursor     int
 	offset     int // first entry shown
@@ -201,8 +203,14 @@ func newModel(ctx context.Context, src source) model {
 	ti.KeyMap.InsertNewline = key.NewBinding(key.WithKeys("alt+enter", "ctrl+j"))
 	ti.FocusedStyle.CursorLine = lipgloss.NewStyle()
 	ti.SetHeight(1)
+	// Typing filters the list. Its text lines up with the titles.
+	fi := textinput.New()
+	fi.Prompt = " › "
+	fi.Placeholder = "filter"
+	fi.PromptStyle, fi.PlaceholderStyle = styleDim, styleDim
+	fi.Focus()
 	return model{
-		ctx: ctx, src: src, entries: map[string]*entry{}, spin: sp,
+		ctx: ctx, src: src, entries: map[string]*entry{}, spin: sp, filter: fi,
 		sem: make(chan struct{}, maxRecapping), now: time.Now, mouseX: -1, mouseY: -1, replyText: ti,
 	}
 }
@@ -251,6 +259,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
+		m.filter.Width = max(10, msg.Width-6)
 		m.fitReply()
 		m.scrollTo()
 		return m, nil
@@ -455,8 +464,10 @@ func (m *model) sortEntries() {
 		wsIndex[w.WorkspaceID] = i
 	}
 	m.order = m.order[:0]
-	for p := range m.entries {
-		m.order = append(m.order, p)
+	for p, e := range m.entries {
+		if m.matches(e) {
+			m.order = append(m.order, p)
+		}
 	}
 	sort.Slice(m.order, func(i, j int) bool {
 		a, b := m.entries[m.order[i]].agent, m.entries[m.order[j]].agent
@@ -481,6 +492,51 @@ func (m *model) sortEntries() {
 		}
 		return paneLess(a.PaneID, b.PaneID)
 	})
+}
+
+// matches says whether every word of the filter is somewhere in what the
+// agent's row shows: its title, status, space, branch, what it's waiting
+// for, its recap or its tokens. The agent being replied to stays listed
+// whatever the filter says.
+func (m model) matches(e *entry) bool {
+	words := strings.Fields(strings.ToLower(m.filter.Value()))
+	if len(words) == 0 || (m.replying && e.agent.PaneID == m.replyTo) {
+		return true
+	}
+	hay := []string{title(e.agent), e.agent.Agent, e.agent.Status, e.branch}
+	if e.agent.Status == "blocked" {
+		// As the header and the row put it.
+		hay = append(hay, "needs you", "waiting")
+	}
+	for _, ws := range m.workspaces {
+		if ws.WorkspaceID == e.agent.WorkspaceID {
+			hay = append(hay, ws.Label)
+		}
+	}
+	if e.session != nil {
+		hay = append(hay, e.session.Meta.Branch)
+		if e.agent.Status == "blocked" {
+			hay = append(hay, e.session.Meta.Pending)
+		}
+	}
+	if e.recap != nil {
+		hay = append(hay, e.recap.Text)
+	}
+	hay = append(hay, tokenValues(e.agent.Tokens, m.tokens)...)
+	all := strings.ToLower(strings.Join(hay, " "))
+	for _, w := range words {
+		if !strings.Contains(all, w) {
+			return false
+		}
+	}
+	return true
+}
+
+// refilter lists what a changed filter matches, from the top.
+func (m *model) refilter() {
+	m.sortEntries()
+	m.cursor, m.offset = 0, 0
+	m.scrollTo()
 }
 
 // paneLess orders pane IDs by their numbers, so w1:p2 comes before w1:p10.
@@ -518,28 +574,49 @@ func (m model) handleKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 	m.flash = ""
 	switch k.String() {
-	case "r":
-		return m.startReply()
-	case "ctrl+c", "esc", "q":
+	case "ctrl+c":
 		return m, tea.Quit
-	case "up", "k", "ctrl+p":
+	case "esc":
+		if m.filter.Value() != "" {
+			m.filter.SetValue("")
+			m.refilter()
+			return m, nil
+		}
+		return m, tea.Quit
+	case "tab":
+		return m.startReply()
+	case "up", "ctrl+p", "ctrl+k":
 		m.move(-1)
-	case "down", "j", "ctrl+n":
+		return m, nil
+	case "down", "ctrl+n", "ctrl+j":
 		m.move(1)
+		return m, nil
 	case "pgup":
 		m.move(-max(1, m.visibleEntries()))
+		return m, nil
 	case "pgdown":
 		m.move(max(1, m.visibleEntries()))
-	case "home", "g":
+		return m, nil
+	case "home":
 		m.move(-len(m.order))
-	case "end", "G":
+		return m, nil
+	case "end":
 		m.move(len(m.order))
+		return m, nil
 	case "enter":
 		return m.activate()
 	case "ctrl+r":
 		return m.recapAgain()
 	}
-	return m, nil
+
+	// Anything else edits the filter.
+	prev := m.filter.Value()
+	var cmd tea.Cmd
+	m.filter, cmd = m.filter.Update(k)
+	if m.filter.Value() != prev {
+		m.refilter()
+	}
+	return m, cmd
 }
 
 // startReply opens the reply line for the selected agent.
@@ -549,6 +626,7 @@ func (m model) startReply() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	m.replying, m.replyTo, m.err = true, e.agent.PaneID, ""
+	m.filter.Blur()
 	m.replyText.SetValue("")
 	m.fitReply()
 	return m, m.replyText.Focus()
@@ -560,13 +638,11 @@ func (m model) handleReplyKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "ctrl+c":
 		return m, tea.Quit
 	case "esc":
-		m.replying = false
-		m.replyText.Blur()
+		m.endReply()
 		return m, nil
 	case "enter":
 		text := strings.TrimSpace(m.replyText.Value())
-		m.replying = false
-		m.replyText.Blur()
+		m.endReply()
 		e := m.entries[m.replyTo]
 		if text == "" || e == nil {
 			return m, nil
@@ -579,6 +655,13 @@ func (m model) handleReplyKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 	m.fitReply()
 	m.scrollTo()
 	return m, cmd
+}
+
+// endReply closes the reply line: typing filters the list again.
+func (m *model) endReply() {
+	m.replying = false
+	m.replyText.Blur()
+	m.filter.Focus()
 }
 
 // fitReply sizes the reply box to what's typed, up to maxReplyLines.
@@ -633,12 +716,12 @@ func (m *model) move(delta int) {
 
 // ── layout ────────────────────────────────────────────────────────────────────
 
-// listTop is the first list line: under the header and a blank.
-const listTop = 2
+// listTop is the first list line: under the header, the filter and a blank.
+const listTop = 3
 
 func (m model) listHeight() int {
-	// header + blank above; status line + footer below, the footer on the
-	// popup's last line (mouse.go counts on that).
+	// header + filter + blank above; status line + footer below, the footer
+	// on the popup's last line (mouse.go counts on that).
 	// A reply being typed takes the status line and more.
 	return max(3, m.height-listTop-2-max(0, m.replyLines()-1))
 }
@@ -810,12 +893,15 @@ func (m model) view() string {
 		return ""
 	}
 	var b strings.Builder
-	b.WriteString(m.viewHeader() + "\n\n")
+	b.WriteString(m.viewHeader() + "\n" + m.filter.View() + "\n\n")
 	h := m.listHeight()
 	used := 0
 	switch {
 	case !m.loaded:
 		b.WriteString("  " + m.spin.View() + " Loading…\n")
+		used++
+	case len(m.order) == 0 && len(m.entries) > 0:
+		b.WriteString(styleDim.Render("  Nothing matches.") + "\n")
 		used++
 	case len(m.order) == 0:
 		b.WriteString(styleDim.Render("  No agents running.") + "\n")
@@ -1176,7 +1262,11 @@ func (m model) footer() []hint {
 	if m.replying {
 		return []hint{{"enter send", "enter"}, {"esc cancel", "esc"}}
 	}
-	return []hint{{"enter go to agent", "enter"}, {"r reply", "r"}, {"^r recap again", "ctrl+r"}, {"esc close", "esc"}}
+	esc := "esc close"
+	if m.filter.Value() != "" {
+		esc = "esc clear"
+	}
+	return []hint{{"enter go to agent", "enter"}, {"tab reply", "tab"}, {"^r recap again", "ctrl+r"}, {esc, "esc"}}
 }
 
 func runPicker(ctx context.Context, cfg config, demo bool) error {
