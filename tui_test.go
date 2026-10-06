@@ -104,7 +104,7 @@ func TestTheViewShowsStatusTitleAndRecap(t *testing.T) {
 		"opus 5.5 · acceptEdits",
 		"● Flaky checkout e2e test", "✓ Release notes for 2.4",
 		"scratch", "Nothing to recap yet.", "Recaps are for Claude agents.",
-		"enter go to agent · tab reply · ^r recap again · esc close",
+		"enter go to agent   tab reply   ^r recap again   esc close", // pills: a cell either side, one between
 	} {
 		if !strings.Contains(v, want) {
 			t.Errorf("view lacks %q:\n%s", want, v)

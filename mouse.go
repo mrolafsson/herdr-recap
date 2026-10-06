@@ -1,73 +1,17 @@
 package main
 
 import (
-	"strings"
-
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 )
 
-// hint is one footer entry. Clicking it presses its key.
-type hint struct {
-	label string
-	key   string // "" = not clickable
-}
-
-const hintSep = " · "
-
-var (
-	defaultStyleHintHot = lipgloss.NewStyle().Bold(true).Underline(true)
-	styleHintHot        = defaultStyleHintHot
-)
-
-// renderFooter draws the hints dim, with the one under the pointer lit up so
-// it reads as clickable.
+// renderFooter draws the keys along the bottom, the one under the pointer
+// lit so it reads as clickable.
 func (m model) renderFooter(hs []hint) string {
 	hot := ""
 	if m.mouseY == m.height-1 {
-		hot = hintAt(hs, m.mouseX)
+		hot = hintAt(hs, m.mouseX, m.width)
 	}
-	parts := make([]string, len(hs))
-	for i, h := range hs {
-		if h.key != "" && h.key == hot {
-			parts[i] = styleHintHot.Render(h.label)
-		} else {
-			parts[i] = styleDim.Render(h.label)
-		}
-	}
-	return styleDim.Render(" ") + strings.Join(parts, styleDim.Render(hintSep))
-}
-
-// hintAt finds the footer entry under column x, laid out as renderFooter does.
-func hintAt(hs []hint, x int) string {
-	pos := 1
-	for _, h := range hs {
-		w := lipgloss.Width(h.label)
-		if x >= pos && x < pos+w {
-			return h.key
-		}
-		pos += w + lipgloss.Width(hintSep)
-	}
-	return ""
-}
-
-// keyMsg turns a hint's key back into the key press it stands for.
-func keyMsg(k string) tea.KeyMsg {
-	switch k {
-	case "enter":
-		return tea.KeyMsg{Type: tea.KeyEnter}
-	case "esc":
-		return tea.KeyMsg{Type: tea.KeyEsc}
-	case "tab":
-		return tea.KeyMsg{Type: tea.KeyTab}
-	case "up":
-		return tea.KeyMsg{Type: tea.KeyUp}
-	case "down":
-		return tea.KeyMsg{Type: tea.KeyDown}
-	case "ctrl+r":
-		return tea.KeyMsg{Type: tea.KeyCtrlR}
-	}
-	return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(k)}
+	return footerLine(hs, hot, m.width)
 }
 
 // handleMouse: hovering highlights, one click goes to the agent, the wheel
@@ -101,7 +45,7 @@ func (m model) handleMouse(ev tea.MouseMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	if ev.Y == m.height-1 {
-		if k := hintAt(m.footer(), ev.X); k != "" {
+		if k := hintAt(m.footer(), ev.X, m.width); k != "" {
 			return m.handleKey(keyMsg(k))
 		}
 		return m, nil

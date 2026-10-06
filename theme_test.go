@@ -252,7 +252,7 @@ func TestUseThemeRecoloursTheStyles(t *testing.T) {
 		"hint": styleHintHot.GetForeground(), "err": styleErr.GetForeground(), "ok": styleOK.GetForeground(),
 		"blocked": styleBlocked.GetForeground(), "working": styleWorking.GetForeground(),
 		"done": styleDone.GetForeground(), "idle": styleIdle.GetForeground(), "selected": styleSelected.GetBackground(),
-		"title": styleTitle.GetForeground(), "recap": styleRecap.GetForeground(),
+		"title": styleTitle.GetForeground(), "recap": styleText.GetForeground(),
 		"branch": styleBranch.GetForeground(), "model": styleModel.GetForeground(), "tasks": styleTasks.GetForeground(),
 		"mode": styleMode.GetForeground(), "token": styleToken.GetForeground(),
 	} {
@@ -268,7 +268,7 @@ func TestUseThemeRecoloursTheStyles(t *testing.T) {
 		t.Error("recolouring dropped the styles' other attributes")
 	}
 	useTheme(nil)
-	if styleErr.GetForeground() != defaultStyleErr.GetForeground() || styleDone.GetForeground() != defaultStyleDone.GetForeground() || theme != nil {
+	if styleErr.GetForeground() != ownTones.Red || styleDone.GetForeground() != ownTones.Teal || theme != nil {
 		t.Error("nil didn't restore the popup's own colours")
 	}
 }
@@ -280,42 +280,18 @@ func TestResetIsTheTerminalsColour(t *testing.T) {
 	p := pal("dracula")
 	p.Red, p.Text, p.SelectionBG = "", "", ""
 	useTheme(p)
-	if styleErr.GetForeground() != (lipgloss.NoColor{}) || styleTitle.GetForeground() != (lipgloss.NoColor{}) ||
-		styleBlocked.GetForeground() != (lipgloss.NoColor{}) {
+	if styleErr.GetForeground() != (lipgloss.NoColor{}) || styleBlocked.GetForeground() != (lipgloss.NoColor{}) {
 		t.Error("a Reset foreground kept a colour")
 	}
-	if styleSelected.GetBackground() != defaultStyleSelected.GetBackground() {
+	// Text left to the terminal is drawn at its brightest (look.go).
+	if styleTitle.GetForeground() != brightest() {
+		t.Error("a title with no colour of the theme's isn't the brightest")
+	}
+	if styleSelected.GetBackground() != ownTones.Selection {
 		t.Error("the selection lost its background")
 	}
 	useTheme(pal("terminal"))
 	if styleTabOn.GetForeground() != lipgloss.Color("4") {
 		t.Error("the terminal theme's ANSI accent wasn't used")
-	}
-}
-
-func TestTheTitleIsTheBrightestText(t *testing.T) {
-	t.Cleanup(func() { useTheme(nil) })
-	// A theme's own text colour is its brightest: kept.
-	useTheme(pal("dracula"))
-	brightenTitle(true)
-	if styleTitle.GetForeground() != lipgloss.Color(herdrPalettes["dracula"].Text) {
-		t.Errorf("dracula: %v", styleTitle.GetForeground())
-	}
-	// herdr's terminal theme leaves text to the terminal: bright white on
-	// dark, black on light.
-	useTheme(pal("terminal"))
-	brightenTitle(true)
-	if styleTitle.GetForeground() != lipgloss.Color("15") {
-		t.Errorf("terminal, dark: %v", styleTitle.GetForeground())
-	}
-	useTheme(pal("terminal"))
-	brightenTitle(false)
-	if styleTitle.GetForeground() != lipgloss.Color("0") {
-		t.Errorf("terminal, light: %v", styleTitle.GetForeground())
-	}
-	useTheme(nil)
-	brightenTitle(true)
-	if styleTitle.GetForeground() != lipgloss.Color("15") || !styleTitle.GetBold() {
-		t.Errorf("no theme: %v", styleTitle.GetForeground())
 	}
 }

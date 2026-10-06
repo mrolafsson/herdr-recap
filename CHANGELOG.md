@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+- **One look, shared with herdr-github and herdr-linear.** A title, a
+  branch, a pull request, an agent and a key are drawn the same in all three
+  (see *Colours* in the README). Here: a PR's badge is coloured as
+  herdr-github colours a PR (draft peach, open green, merged mauve, closed
+  red, with its checks and review in their own colours) instead of all
+  green, and the count that needs you is a pill.
+- **Keys are pills.** The keys along the bottom are solid chips, coloured by
+  what they do; the one under the pointer underlines. Too many for the
+  popup's width, and labels shorten, then the least missed keys are left out.
+- **The `terminal` theme keeps its hierarchy.** Branches and the dim details
+  on the right no longer share the recap's grey.
+
 ## 0.2.1 - 2026-10-06
 
 - A PR from herdr-github is on a row once (*#148 merged*), not twice

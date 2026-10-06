@@ -123,7 +123,8 @@ agents: no Claude calls, safe to screenshot.
 | `ctrl+r` | write that agent's recap again, now |
 | `esc` | clear the filter, then close |
 
-The footer's hints are buttons too.
+The keys along the bottom are pills, and buttons: the one under the pointer
+underlines, and a click presses it.
 
 A recap written before the agent carried on says how old it is (*recap from
 20m ago*) and is drawn dimmer until it's rewritten, which opening the popup
@@ -172,8 +173,39 @@ Optional: `config.json` in the plugin's config directory
 | `theme` | ask the terminal | `"dark"` or `"light"` background |
 | `tokens` | all | Which pane tokens to show, in order, e.g. `["pr"]`. By default all, with a PR from herdr-github said once: its `prs` (state, checks and the agent's other PRs), or else its `pr`, without the `pr_*` details |
 
+### Colours
+
 Colours come from herdr's theme: the title in its brightest text, then the
 recap, then the details, each kind in its own colour.
+
+The herdr plugins (herdr-github, herdr-linear, herdr-recap) draw the same
+thing the same way, from one shared file (`look.go`):
+
+| what                 | how it's drawn |
+|----------------------|----------------|
+| a title              | the theme's brightest text; bold where it heads a card or a screen |
+| prose                | a step quieter |
+| where, when, who     | dim |
+| a branch             | mauve |
+| a pull request       | its state's colour: draft peach (work in progress), open green, merged mauve, closed red |
+| an agent             | its state's mark and colour, as in herdr's sidebar: `◉` needs you, `◔` working, `●` done, `✓` idle |
+| counts               | yellow; added green, removed red; tasks teal |
+| keys                 | pills along the bottom, coloured by what they do: green goes somewhere, peach changes something, blue changes what you see, grey leaves |
+| a screen's subject   | wears its state as a pill (`Open`, `Draft`, `In Review`) |
+
+**The `terminal` theme.** herdr's `terminal` theme draws with your terminal's
+16 colours, and gives several of these the same one (branches and dim text
+the body's grey). The plugins spread them over the terminal's other colours
+(branches on magenta, dim on bright black), so the list reads the same as on
+a named theme. A colour you set yourself in `[theme.custom]` wins.
+
+**A narrow popup.** When the keys don't fit, their labels shorten first (`^o
+open in Linear` becomes `^o open`), then the keys you'd miss least are left
+out. A key that isn't shown still works.
+
+A pull request's badge from herdr-github (`#482 ✓ approved`, `#476 draft ●`)
+is coloured piece by piece as that plugin colours a PR: the number and its
+state in the state's colour, the checks and the review in theirs.
 
 ## Privacy
 

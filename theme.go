@@ -10,7 +10,6 @@ import (
 	"strings"
 
 	"github.com/BurntSushi/toml"
-	"github.com/charmbracelet/lipgloss"
 )
 
 // palette is herdr's theme: the tokens of its Palette (src/app/state.rs). A
@@ -159,6 +158,9 @@ func herdrTheme(dark bool) palette {
 	p, ok := herdrPalettes[canonicalThemeName(name)]
 	if !ok {
 		p = herdrPalettes[fallback]
+	}
+	if ok && canonicalThemeName(name) == "terminal" {
+		p = spreadTerminal(p)
 	}
 	p.override(&custom.themeTokens)
 	if a := cfg.UI.Accent; a != nil && *a != "cyan" && custom.Accent == nil {
@@ -339,66 +341,4 @@ func parseColor(s string) string {
 		return c
 	}
 	return "6"
-}
-
-// theme is the palette in use, nil for the popup's own colours.
-var theme *palette
-
-// brightenTitle makes the title the brightest the background allows when
-// the theme leaves text to the terminal (herdr's "terminal" theme, or none):
-// bright white on dark, black on light. A theme's own text colour is
-// already its brightest, so it's kept.
-func brightenTitle(dark bool) {
-	if theme != nil && theme.Text != "" {
-		return
-	}
-	c := "0"
-	if dark {
-		c = "15"
-	}
-	styleTitle = styleTitle.Foreground(lipgloss.Color(c))
-}
-
-// useTheme recolours the popup with p, or with nil restores its own colours.
-// A Reset colour is the terminal's own; only the selection keeps the popup's
-// background then, so the selected row stays visible. The status colours are
-// the ones herdr's sidebar gives each status.
-func useTheme(p *palette) {
-	theme = p
-	styleDim, styleTabOn, styleHintHot = defaultStyleDim, defaultStyleTabOn, defaultStyleHintHot
-	styleErr, styleOK, styleSelected = defaultStyleErr, defaultStyleOK, defaultStyleSelected
-	styleBlocked, styleWorking, styleDone, styleIdle = defaultStyleBlocked, defaultStyleWorking, defaultStyleDone, defaultStyleIdle
-	styleTitle, styleRecap = defaultStyleTitle, defaultStyleRecap
-	styleBranch, styleModel, styleTasks, styleMode, styleToken = defaultStyleBranch, defaultStyleModel, defaultStyleTasks, defaultStyleMode, defaultStyleToken
-	if p == nil {
-		return
-	}
-	fg := func(s lipgloss.Style, c string) lipgloss.Style {
-		if c == "" {
-			return s.Foreground(lipgloss.NoColor{})
-		}
-		return s.Foreground(lipgloss.Color(c))
-	}
-	styleDim = fg(styleDim, p.Overlay0)
-	styleTabOn = fg(styleTabOn, p.Accent)
-	styleHintHot = fg(styleHintHot, p.Accent)
-	styleErr = fg(styleErr, p.Red)
-	styleOK = fg(styleOK, p.Green)
-	styleBlocked = fg(styleBlocked, p.Red)
-	styleWorking = fg(styleWorking, p.Peach)
-	styleDone = fg(styleDone, p.Teal)
-	styleIdle = fg(styleIdle, p.Green)
-	// The title in the theme's brightest text, the recap a step below it,
-	// and the details under the title dimmer still (styleDim).
-	styleTitle = fg(styleTitle, p.Text)
-	styleRecap = fg(styleRecap, p.Subtext0)
-	// The details under a title, each kind in its own theme colour.
-	styleBranch = fg(styleBranch, p.Mauve)
-	styleModel = fg(styleModel, p.Blue)
-	styleTasks = fg(styleTasks, p.Teal)
-	styleMode = fg(styleMode, p.Yellow)
-	styleToken = fg(styleToken, p.Green)
-	if p.SelectionBG != "" {
-		styleSelected = styleSelected.Background(lipgloss.Color(p.SelectionBG))
-	}
 }

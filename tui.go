@@ -75,48 +75,6 @@ const maxRecapping = 6
 // words, which is two or three lines in a popup.
 const recapLines = 3
 
-// ── styles ────────────────────────────────────────────────────────────────────
-
-// The defaults, for a theme that leaves a colour unset; useTheme recolours
-// the styles from herdr's theme. The status colours are herdr's sidebar's.
-var (
-	defaultStyleDim      = lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "245", Dark: "243"})
-	defaultStyleTabOn    = lipgloss.NewStyle().Bold(true).Underline(true)
-	defaultStyleSelected = lipgloss.NewStyle().Background(lipgloss.AdaptiveColor{Light: "254", Dark: "237"})
-	defaultStyleErr      = lipgloss.NewStyle().Foreground(lipgloss.Color("#eb5757"))
-	defaultStyleOK       = lipgloss.NewStyle().Foreground(lipgloss.Color("10"))
-	defaultStyleBlocked  = lipgloss.NewStyle().Foreground(lipgloss.Color("9"))
-	defaultStyleWorking  = lipgloss.NewStyle().Foreground(lipgloss.Color("#c78a1f"))
-	defaultStyleDone     = lipgloss.NewStyle().Foreground(lipgloss.Color("14"))
-	defaultStyleIdle     = lipgloss.NewStyle().Foreground(lipgloss.Color("10"))
-	defaultStyleTitle    = lipgloss.NewStyle().Bold(true)
-	defaultStyleRecap    = lipgloss.NewStyle()
-	defaultStyleBranch   = lipgloss.NewStyle().Foreground(lipgloss.Color("5"))
-	defaultStyleModel    = lipgloss.NewStyle().Foreground(lipgloss.Color("4"))
-	defaultStyleTasks    = lipgloss.NewStyle().Foreground(lipgloss.Color("6"))
-	defaultStyleMode     = lipgloss.NewStyle().Foreground(lipgloss.Color("3"))
-	defaultStyleToken    = lipgloss.NewStyle().Foreground(lipgloss.Color("2"))
-)
-
-var (
-	styleDim      = defaultStyleDim
-	styleTabOn    = defaultStyleTabOn
-	styleSelected = defaultStyleSelected
-	styleErr      = defaultStyleErr
-	styleOK       = defaultStyleOK
-	styleBlocked  = defaultStyleBlocked
-	styleWorking  = defaultStyleWorking
-	styleDone     = defaultStyleDone
-	styleIdle     = defaultStyleIdle
-	styleTitle    = defaultStyleTitle
-	styleRecap    = defaultStyleRecap
-	styleBranch   = defaultStyleBranch
-	styleModel    = defaultStyleModel
-	styleTasks    = defaultStyleTasks
-	styleMode     = defaultStyleMode
-	styleToken    = defaultStyleToken
-)
-
 // statusRank orders the list: what needs you first, then what finished, then
 // what's still going, then the rest.
 func statusRank(status string) int {
@@ -947,6 +905,11 @@ func (m model) viewHeader() string {
 			if s.status == "blocked" && n == 1 {
 				label = "needs you"
 			}
+			if s.status == "blocked" {
+				// The one count that's a call on you wears a pill.
+				parts = append(parts, statePill(s.style, strconv.Itoa(n)+" "+label))
+				continue
+			}
 			parts = append(parts, s.style.Render(strconv.Itoa(n))+styleDim.Render(" "+label))
 		}
 	}
@@ -961,21 +924,6 @@ func (m model) viewHeader() string {
 		}
 	}
 	return line
-}
-
-// glyph is the status mark herdr's sidebar uses, in its colour.
-func (m model) glyph(status string) string {
-	switch status {
-	case "blocked":
-		return styleBlocked.Render("◉")
-	case "working":
-		return styleWorking.Render(m.spin.View())
-	case "done":
-		return styleDone.Render("●")
-	case "idle":
-		return styleIdle.Render("✓")
-	}
-	return styleDim.Render("○")
 }
 
 // title is what the row is called: the agent's own terminal title (Claude's
@@ -1007,7 +955,7 @@ func (m model) viewEntry(e *entry, selected bool) []string {
 	if s := m.inState(e); s != "" {
 		right = append(right, s)
 	}
-	left := " " + m.glyph(e.agent.Status) + " "
+	left := " " + agentMark(e.agent.Status, m.spin.View()) + " "
 	style := styleTitle
 	if e.agent.Status == "working" {
 		style = styleWorking.Bold(true)
@@ -1022,7 +970,7 @@ func (m model) viewEntry(e *entry, selected bool) []string {
 	}
 	// The recap right under the title, where the eye lands; on the selected
 	// row in the title's colour, to stand out against the highlight.
-	recap := styleRecap
+	recap := styleText
 	if selected {
 		recap = styleTitle.UnsetBold()
 	}
@@ -1074,7 +1022,7 @@ func (m model) details(e *entry, meta *sessionMeta) []string {
 		info = append(info, styleModel.Render(e.agent.Agent))
 	}
 	for _, v := range tokenValues(e.agent.Tokens, m.tokens) {
-		info = append(info, styleToken.Render(v))
+		info = append(info, tokenText(v))
 	}
 	switch {
 	case e.recapping && e.recap != nil:
@@ -1263,13 +1211,14 @@ func (m model) about() string {
 
 func (m model) footer() []hint {
 	if m.replying {
-		return []hint{{"enter send", "enter"}, {"esc cancel", "esc"}}
+		return []hint{{"enter send", "enter", hintAct}, {"esc cancel", "esc", hintQuiet}}
 	}
 	esc := "esc close"
 	if m.filter.Value() != "" {
 		esc = "esc clear"
 	}
-	return []hint{{"enter go to agent", "enter"}, {"tab reply", "tab"}, {"^r recap again", "ctrl+r"}, {esc, "esc"}}
+	// By kind, so the colours sit together: go, act, view, leave.
+	return []hint{{"enter go to agent", "enter", hintGo}, {"tab reply", "tab", hintAct}, {"^r recap again", "ctrl+r", hintView}, {esc, "esc", hintQuiet}}
 }
 
 func runPicker(ctx context.Context, cfg config, demo bool) error {
@@ -1281,8 +1230,8 @@ func runPicker(ctx context.Context, cfg config, demo bool) error {
 			cfg.Theme = "dark"
 		}
 	}
-	useTheme(pickerTheme(cfg.Theme == "dark"))
-	brightenTitle(cfg.Theme == "dark")
+	darkTerminal = cfg.Theme == "dark"
+	useTheme(pickerTheme(darkTerminal))
 	if !demo {
 		defer notePopup()()
 	}

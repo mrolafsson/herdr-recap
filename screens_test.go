@@ -33,7 +33,6 @@ func TestWriteDemoScreens(t *testing.T) {
 	// herdr's default theme, which freeze's background matches.
 	catppuccin := herdrPalettes["catppuccin"]
 	useTheme(&catppuccin)
-	brightenTitle(true)
 	t.Cleanup(func() { useTheme(nil) })
 	m, _ := demoModel(t)
 	m.width, m.height = 100, 38
