@@ -218,6 +218,12 @@ type model struct {
 	replying  bool
 	replyTo   string // its pane
 	replyText textarea.Model
+
+	// The machine, from herdr-vitals: its CPU since the popup opened, and
+	// its memory now. Empty without herdr-vitals.
+	cpu      []float64
+	mem      float64
+	vitalsCh <-chan vitalsReading // the stream, to wait on for the next
 }
 
 func newModel(ctx context.Context, src source) model {
@@ -259,7 +265,7 @@ func newModel(ctx context.Context, src source) model {
 
 func (m model) Init() tea.Cmd {
 	src := m.src
-	return tea.Batch(m.spin.Tick, m.loadAgents(), func() tea.Msg { return pluginsMsg(src.plugins()) })
+	return tea.Batch(m.spin.Tick, m.loadAgents(), func() tea.Msg { return pluginsMsg(src.plugins()) }, m.startVitals())
 }
 
 func (m model) loadAgents() tea.Cmd {
@@ -498,6 +504,19 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case pluginsMsg:
 		m.links = msg
 		return m, nil
+
+	case vitalsStartMsg:
+		m.vitalsCh = msg.ch
+		return m, nextVitals(msg.ch)
+
+	case vitalsMsg:
+		m.cpu = append(m.cpu, msg.CPU)
+		if len(m.cpu) > vitalsKept {
+			m.cpu = m.cpu[len(m.cpu)-vitalsKept:]
+		}
+		m.mem = msg.Mem
+		// And wait for the next: a reading a second, for as long as it's open.
+		return m, nextVitals(m.vitalsCh)
 
 	case seekMsg:
 		if msg.seq != m.seekSeq || msg.filter != m.filter.Value() || len(m.order) > 0 {
@@ -1581,13 +1600,33 @@ func (m model) viewHeader() string {
 		}
 	}
 	line, _ := m.tabBar()
+	right := ""
 	if recapping > 0 {
-		right := m.spin.View() + styleDim.Render(fmt.Sprintf(" recapping %d ", recapping))
-		if pad := m.width - lipgloss.Width(line) - lipgloss.Width(right); pad > 1 {
-			line += strings.Repeat(" ", pad) + right
+		right = m.spin.View() + styleDim.Render(fmt.Sprintf(" recapping %d ", recapping))
+		if m.width-lipgloss.Width(line)-lipgloss.Width(right) <= 1 {
+			right = ""
 		}
 	}
+	// The machine at the right edge, where it stays: what's recapping comes
+	// and goes to its left, without moving it.
+	if strip, _ := m.headerVitals(lipgloss.Width(line), lipgloss.Width(right)); strip != "" {
+		right += "  " + strip + " "
+	}
+	if pad := m.width - lipgloss.Width(line) - lipgloss.Width(right); right != "" && pad > 1 {
+		line += strings.Repeat(" ", pad) + right
+	}
 	return line
+}
+
+// headerVitals is herdr-vitals' strip for the header, at its right edge,
+// with tabs cells of tabs and before cells of what's recapping to its left,
+// and where it starts: "" if there's no room, or nothing to draw.
+func (m model) headerVitals(tabs, before int) (string, int) {
+	strip := m.vitalsStrip(m.width - tabs - before - 3 - 2) // gaps, and a cell at the edge
+	if strip == "" {
+		return "", 0
+	}
+	return strip, m.width - 1 - lipgloss.Width(strip)
 }
 
 // title is what the row is called: the agent's own terminal title (Claude's

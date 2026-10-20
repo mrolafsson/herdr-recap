@@ -52,6 +52,10 @@ func (m model) handleMouse(ev tea.MouseMsg) (tea.Model, tea.Cmd) {
 	}
 	// A stage's tab. Not while replying: the reply is to an agent listed now.
 	if ev.Y == 0 && !m.replying {
+		// The machine's CPU and memory: over to herdr-vitals.
+		if strip, x0 := m.vitalsHit(); strip > 0 && ev.X >= x0 && ev.X < x0+strip {
+			return m.openVitals()
+		}
 		_, tabs := m.tabBar()
 		for _, t := range tabs {
 			if ev.X >= t.x0 && ev.X < t.x1 {

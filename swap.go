@@ -63,7 +63,7 @@ func swapEnv(env []string, own string, p popupRef, root string) []string {
 			}
 		case strings.HasPrefix(k, "HERDR_PLUGIN_"), k == returnEnv,
 			strings.HasPrefix(k, "HERDR_RECAP_"), strings.HasPrefix(k, "HERDR_GITHUB_"), strings.HasPrefix(k, "HERDR_LINEAR_"),
-			strings.HasPrefix(k, "HERDR_SNOOZE_"):
+			strings.HasPrefix(k, "HERDR_SNOOZE_"), strings.HasPrefix(k, "HERDR_VITALS_"):
 		default:
 			out = append(out, kv)
 		}

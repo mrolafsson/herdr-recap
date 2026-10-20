@@ -52,6 +52,9 @@ type source interface {
 	// plugins are the other plugins a row can link to, and open closes this
 	// popup for one of theirs.
 	plugins() map[string]popupRef
+	// vitals is herdr-vitals' readings of this machine, a second apart, or
+	// nil when it isn't installed.
+	vitals(ctx context.Context) <-chan vitalsReading
 	open(popupRef) error
 	// wake ends a snooze now, through herdr-snooze.
 	wake(paneID string) error

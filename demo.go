@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"math"
 	"sync"
 	"time"
 )
@@ -245,14 +246,48 @@ func (d *demoSource) search(_ context.Context, s claudeSession, words []string) 
 // The demo has no Memex: what's found is listed in the usual order.
 func (d *demoSource) rank(context.Context, string, []string) map[string]float64 { return nil }
 
-// The demo has herdr-github, herdr-linear and herdr-snooze, so its pull
-// requests, issues and snoozing look as they would.
+// The demo has herdr-github, herdr-linear, herdr-snooze and herdr-vitals,
+// so its pull requests, issues, snoozing and machine look as they would.
 func (d *demoSource) plugins() map[string]popupRef {
 	return map[string]popupRef{
 		githubPlugin: {PluginID: githubPlugin, Entrypoint: "picker"},
 		linearPlugin: {PluginID: linearPlugin, Entrypoint: "picker"},
 		snoozePlugin: {PluginID: snoozePlugin, Entrypoint: "picker"},
+		vitalsPlugin: {PluginID: vitalsPlugin, Entrypoint: "picker"},
 	}
+}
+
+// demoVitals is a made-up machine's CPU, busy with a few agents, reading i.
+func demoVitals(i int) vitalsReading {
+	f := float64(i)
+	cpu := 34 + 18*math.Sin(f/7) + 9*math.Sin(f/2.3) + 6*math.Sin(f*1.7)
+	return vitalsReading{CPU: math.Round(max(2, min(100, cpu))*10) / 10, Mem: 61 + 2*math.Sin(f/20), Load: 0.42, Cores: 16}
+}
+
+// vitals is the made-up machine: a minute of it at once, then a reading a
+// second.
+func (d *demoSource) vitals(ctx context.Context) <-chan vitalsReading {
+	ch := make(chan vitalsReading)
+	go func() {
+		defer close(ch)
+		tk := time.NewTicker(time.Second)
+		defer tk.Stop()
+		for i := 0; ; i++ {
+			if i > 60 {
+				select {
+				case <-tk.C:
+				case <-ctx.Done():
+					return
+				}
+			}
+			select {
+			case ch <- demoVitals(i):
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+	return ch
 }
 
 func (d *demoSource) open(popupRef) error { return errDemo }

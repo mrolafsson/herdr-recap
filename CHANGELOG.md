@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.10.0 - 2026-10-20
+
+- **How the machine is doing, beside the tabs.** With
+  [herdr-vitals](https://github.com/mrolafsson/herdr-vitals) installed, the
+  space right of the tabs has a small graph of the machine's CPU since the
+  popup opened and a gauge of its memory, as there's room for them. A click
+  opens herdr-vitals' popup; `esc` there comes back here.
+
 ## 0.9.0 - 2026-10-17
 
 - **A rename takes the agent's space along.** When the agent is the only
