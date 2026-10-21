@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.10.1 - 2026-10-21
+
+- **A rename shows in herdr straight away.** Where a plugin gives herdr the
+  agent's title from Claude's transcript (such as claude-session-title),
+  herdr went on showing the old one after a rename until the agent's next
+  turn, so a busy agent renamed when it finished looked as if it hadn't
+  been. The new title is now shown as soon as it's given.
+
 ## 0.10.0 - 2026-10-20
 
 - **How the machine is doing, beside the tabs.** With

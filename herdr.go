@@ -94,6 +94,10 @@ type agentInfo struct {
 	Focused     bool   `json:"focused"`
 	Cwd         string `json:"cwd"`
 	Title       string `json:"terminal_title_stripped"`
+	// Shown is the title a plugin reports for the agent (one that reads
+	// Claude's from its transcript, say), which herdr shows over the
+	// terminal's: "" when none does.
+	Shown string `json:"title"`
 	// Tokens are the pane's display values other plugins report (a PR badge,
 	// a profile…): what the sidebar's $name row tokens show.
 	Tokens map[string]string `json:"tokens"`

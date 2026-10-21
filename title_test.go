@@ -253,3 +253,51 @@ func TestARenameAskedOfABusyAgentIsGivenWhenItsDone(t *testing.T) {
 		t.Errorf("%+v", r)
 	}
 }
+
+func TestARenameIsShownWhereAPluginReportsTitles(t *testing.T) {
+	withTitles(t, titleReply)
+	s := testSessionWith(t, "one\n")
+	cfg := withDefaults(config{})
+	withHerdr(t, nil, s)
+	if _, _, err := ensureRecap(context.Background(), cfg, s, "fix-login-bug", false); err != nil {
+		t.Fatal(err)
+	}
+	oldPrompt, oldReport := promptAgent, reportTitle
+	promptAgent = func(string, string) error { return nil }
+	var reported []string
+	reportTitle = func(pane, agent, title string) error {
+		reported = append(reported, pane+" "+agent+": "+title)
+		return nil
+	}
+	t.Cleanup(func() { promptAgent, reportTitle = oldPrompt, oldReport })
+	rename := func(shown string) {
+		t.Helper()
+		a := claudeAgent("w1:p1", "idle", 3)
+		a.Shown = shown
+		agentsNow = func() ([]agentInfo, error) { return []agentInfo{a}, nil }
+		if err := askRename("w1:p1", s.ID); err != nil {
+			t.Fatal(err)
+		}
+		if err := giveTitle("w1:p1", s.ID); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// herdr shows the terminal's title, which /rename changes: left alone.
+	rename("")
+	if len(reported) != 0 {
+		t.Fatalf("reported %q", reported)
+	}
+	// A plugin's title, read from the transcript at the next turn: the new
+	// one is shown now.
+	rename("Fix login")
+	if len(reported) != 1 || reported[0] != "w1:p1 claude: ACT-12 Fix the Login Bug" {
+		t.Errorf("reported %q", reported)
+	}
+	// Already showing it: nothing to report.
+	reported = nil
+	rename("ACT-12 Fix the Login Bug")
+	if len(reported) != 0 {
+		t.Errorf("reported %q", reported)
+	}
+}

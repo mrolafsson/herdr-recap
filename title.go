@@ -251,6 +251,35 @@ var promptAgent = func(paneID, text string) error {
 	return herdrCall("agent.prompt", map[string]any{"target": paneID, "text": text}, nil)
 }
 
+// showTitle has herdr show an agent's new title when a plugin reports its
+// titles. Such a plugin reads Claude's from the transcript on a prompt or at
+// the end of a turn, and /rename is neither, so without this herdr would go
+// on showing the old one until the agent's next turn. Its next report wins
+// over this one, with the same title by then. With no plugin reporting
+// titles, herdr shows the terminal's, which /rename changes: nothing's
+// reported, or this one would hide a rename you make yourself later.
+func showTitle(paneID, title string) {
+	agents, err := agentsNow()
+	if err != nil {
+		return
+	}
+	for _, a := range agents {
+		if a.PaneID == paneID && a.Shown != "" && a.Shown != title {
+			if err := reportTitle(paneID, a.Agent, title); err != nil {
+				fmt.Fprintln(os.Stderr, "herdr-recap: showing the title of", paneID+":", err)
+			}
+		}
+	}
+}
+
+// reportTitle is herdr's pane.report_metadata, for a title; a variable so
+// tests can stand one in.
+var reportTitle = func(paneID, agent, title string) error {
+	return herdrCall("pane.report_metadata", map[string]any{
+		"pane_id": paneID, "source": "plugin:herdr-recap", "agent": agent, "title": title,
+	}, nil)
+}
+
 // giveTitle types the session's pending rename into its agent (Claude's
 // /rename), once: with none pending it does nothing. The caller has found
 // the agent between turns.
@@ -268,6 +297,7 @@ func giveTitle(paneID, sessionID string) error {
 	if err := promptAgent(paneID, "/rename "+r.Title); err != nil {
 		return err
 	}
+	showTitle(paneID, r.Title)
 	os.Remove(renamingPath(paneID))
 	r.Renaming, r.Settled = false, true
 	return saveRecap(*r)
