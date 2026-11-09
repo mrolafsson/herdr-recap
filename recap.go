@@ -326,6 +326,8 @@ func claudeBinary(cfg config, s claudeSession) string {
 
 func runRecap(ctx context.Context, cfg config, s claudeSession) (recap, error) {
 	switch {
+	case s.Native && s.Agent == "copilot":
+		return runCopilotRecap(ctx, cfg, s)
 	case s.Native && s.Agent == "omp":
 		return runOmpRecap(ctx, cfg, s)
 	case s.Native:

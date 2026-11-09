@@ -111,7 +111,7 @@ func withDefaults(cfg config) config {
 	}
 	cfg.Claude = expandHome(cfg.Claude)
 	if len(cfg.Agents) == 0 {
-		cfg.Agents = []string{"claude", "codex", "omp"}
+		cfg.Agents = []string{"claude", "codex", "omp", "copilot"}
 	}
 	cfg.Codex = expandHome(cfg.Codex)
 	cfg.Memex = expandHome(cfg.Memex)
