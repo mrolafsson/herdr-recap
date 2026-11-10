@@ -131,7 +131,7 @@ func recapContext(ctx context.Context, cfg config) (context.Context, context.Can
 
 func supportedAgent(agent string) bool {
 	switch agent {
-	case "claude", "codex", "omp", "opencode", "hermes":
+	case "claude", "codex", "omp", "copilot", "opencode", "hermes":
 		return true
 	}
 	return false
@@ -147,6 +147,8 @@ func recapCapable(cfg config, a agentInfo) bool {
 		return false
 	case a.Agent == "claude", a.Agent == "codex":
 		return true
+	case a.Agent == "copilot":
+		return a.AgentSession.Kind == "id" && copilotSessionDir(a.AgentSession.Value) != ""
 	case a.Agent == "omp":
 		return a.AgentSession.Kind == "path" && a.AgentSession.Value != ""
 	}
@@ -181,6 +183,8 @@ func resolveAgentSession(ctx context.Context, cfg config, a agentInfo) (claudeSe
 		return resolveCodexSession(a)
 	case "omp":
 		return resolveOmpSession(a)
+	case "copilot":
+		return resolveCopilotSession(a)
 	}
 	return resolveMemexSession(ctx, cfg, a)
 }

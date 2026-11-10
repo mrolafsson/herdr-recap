@@ -404,11 +404,12 @@ does.
 ## Other agents
 
 Claude, Codex and omp agents are recapped, each in a fork of its own
-conversation that isn't kept. `agents` in `config.json` says otherwise:
+conversation that isn't kept; GitHub Copilot CLI agents are recapped from the
+session's files, with no fork. `agents` in `config.json` says otherwise:
 fewer, or more.
 
 ```json
-{ "agents": ["claude", "codex", "omp", "opencode"] }
+{ "agents": ["claude", "codex", "omp", "copilot", "opencode"] }
 ```
 
 **Codex** recaps itself, as Claude does: `codex exec fork --ephemeral` forks
@@ -429,6 +430,14 @@ discovery is turned off with a `--config` overlay) — and without herdr's or
 the terminal's environment, so it reports to nothing and leaves no
 `--continue` breadcrumb. Without that integration an omp pane has no
 session for herdr to report, and isn't recapped.
+
+**GitHub Copilot CLI** is recapped without a model call: Copilot keeps each
+session's name (`workspace.yaml`) and event log (`events.jsonl`) under
+`~/.copilot/session-state/<id>/` (or `$COPILOT_HOME`), and herdr reports the
+session's ID for a Copilot pane, so the recap is the session's name, the last
+thing you asked, and how the agent last answered. It costs nothing, forks no
+session and runs no hooks. It's an excerpt, not a summary: Copilot CLI has no
+fork that saves nothing to write a summary in.
 
 **OpenCode** and **Hermes** are recapped through
 [Memex](https://github.com/nicosuave/memex), which reads their sessions.

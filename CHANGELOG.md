@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- **GitHub Copilot CLI agents are recapped.** Read from the session's own
+  files (`~/.copilot/session-state/<id>/`, or `$COPILOT_HOME`) with no model
+  call: the session's name, the last thing asked, and the last reply. On by
+  default, as Codex and omp are.
+
 ## 0.12.11 - 2026-11-04
 
 - **omp agents are recapped,** by
