@@ -238,3 +238,29 @@ func TestMemexScoresTheSessionsWhatWasSaidIn(t *testing.T) {
 		t.Errorf("without Memex: %v, %q", got, calls)
 	}
 }
+
+func TestTheAppsModSearchesTheConversationsOfTheProcessesItNames(t *testing.T) {
+	dir := claudeDir(t, "4242", "/home/me/code/app", false)
+	projects := filepath.Join(dir, "projects", "-home-me-code-app")
+	write(t, filepath.Join(projects, testSession+".jsonl"),
+		`{"type":"user","message":{"role":"user","content":"move the vault change over to ENG-142"}}`+"\n"+
+			`{"type":"user","message":{"role":"user","content":[{"type":"tool_result","content":"ENG-977, in a file it read"}]}}`+"\n")
+	const other = "bb81ff42-9e20-4d21-ab0c-8eba1d667245"
+	write(t, filepath.Join(dir, "sessions", "4243.json"), `{"sessionId":"`+other+`","cwd":"/home/me/code/app"}`)
+	write(t, filepath.Join(projects, other+".jsonl"),
+		`{"type":"user","message":{"role":"user","content":"tidy the README"}}`+"\n")
+	withEnv(t, map[string]string{"CLAUDE_CONFIG_DIR": dir}, nil)
+	// 1 is no Claude process: it's passed over, not an error.
+	asks := []sessionAsk{{PID: 4242}, {PID: 4243}, {PID: 1}}
+
+	got := searchAsked(context.Background(), config{}, asks, "142")
+	if len(got) != 1 || got[0].PID != 4242 || !strings.Contains(got[0].Text, "over to ENG-142") {
+		t.Fatalf("found %+v", got)
+	}
+	// What a tool read isn't searched, nor is a filter too short to be worth it.
+	for _, filter := range []string{"977", "42"} {
+		if got := searchAsked(context.Background(), config{}, asks, filter); got == nil || len(got) != 0 {
+			t.Errorf("%q found %+v", filter, got)
+		}
+	}
+}
