@@ -146,15 +146,13 @@ func runSessions(ctx context.Context, cfg config, args []string) error {
 	return json.NewEncoder(os.Stdout).Encode(out)
 }
 
-// sessionFound is an agent whose conversation has the mod's filter: some of
-// what was said there, as the popup shows it in place of the recap.
+// sessionFound is an agent whose conversation has the mod's filter.
 type sessionFound struct {
 	PID  int    `json:"pid"`
 	Text string `json:"text"`
 }
 
-// runSearch prints the asked-for agents whose conversations say every word
-// of the filter, as JSON: the mod's filter, looked for past its rows.
+// runSearch prints the asked-for agents whose conversations say the filter.
 func runSearch(ctx context.Context, cfg config, args []string) error {
 	if len(args) != 2 {
 		return errors.New(`search needs two arguments: [{"pid": N}, …] and the filter`)
@@ -166,9 +164,8 @@ func runSearch(ctx context.Context, cfg config, args []string) error {
 	return json.NewEncoder(os.Stdout).Encode(searchAsked(ctx, cfg, asks, args[1]))
 }
 
-// searchAsked searches each asked-for agent's conversation for the filter, a
-// few at a time, and keeps the ones that have it, in the order asked. An
-// agent with no session to read is passed over.
+// searchAsked searches each agent's conversation, a few at a time. An agent
+// with no session to read is passed over.
 func searchAsked(ctx context.Context, cfg config, asks []sessionAsk, filter string) []sessionFound {
 	found := make([]sessionFound, 0, len(asks))
 	words := searchWords(filter)

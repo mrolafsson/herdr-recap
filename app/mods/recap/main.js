@@ -1,9 +1,8 @@
 // Every agent on every machine in one list, grouped by whose move it is, each
 // with a recap of where it got to and everything around it: what it's asking,
 // its branch, what's not committed or pushed, its tasks, its Linear issue and
-// its pull request. Type to filter (the agents' conversations are searched
-// too), ←/→ for the stage, ↑/↓ and Enter (or a click) to go to the agent on
-// whichever machine it runs, Tab to reply.
+// its pull request. Type to filter, ←/→ for the stage, ↑/↓ and Enter (or a
+// click) to go to the agent on whichever machine it runs, Tab to reply.
 //
 // What's known of an agent comes from herdr-recap (`sessions`), run on the
 // machine the agent runs on; its pull request from herdr-github (`prs`) and its
@@ -20,8 +19,7 @@ import { tones, tint, countPill, STAGES, ALL, stageOf, stateIcon, stageColor, ic
 // and issues (which the plugins cache for a minute) less often.
 const REREAD_MS = 5000;
 const LOOKUP_MS = 20000;
-// The conversations are searched for a filter this long or longer (what
-// herdr-recap takes), once the typing has paused this long.
+// The conversations are searched once the typing pauses, as the TUI does.
 const SEEK_MIN = 3;
 const SEEK_MS = 300;
 // The list's height at most; the popup's own height caps it too.
@@ -118,9 +116,7 @@ const CACHE = `${appHome()}/recap-cache.json`;
 export default class Recap extends View {
   init(_props, cx) {
     this.filter = "";
-    // Agents whose conversations say the filter, by address: some of what was
-    // said there. foundFor is the filter they were found for; seeking counts
-    // the filters typed, and searching is whether the latest is still out.
+    // What each agent's conversation says of the filter, by address.
     this.found = {};
     this.foundFor = "";
     this.seeking = 0;
@@ -471,8 +467,7 @@ export default class Recap extends View {
     });
   }
 
-  // The Claude agents herdr-recap can be asked about, by machine: each with
-  // its process and the folder it's in.
+  // The Claude agents herdr-recap can be asked about, by machine.
   claudes() {
     const core = this.core;
     const byMachine = new Map();
@@ -487,9 +482,7 @@ export default class Recap extends View {
     return byMachine;
   }
 
-  // Searches the agents' conversations for the filter, once the typing has
-  // paused: what you and the agent said, read by herdr-recap on the machine
-  // each one runs on. An agent no row finds is listed by what it said.
+  // Searches the conversations for the filter, on each agent's machine.
   seekSoon(cx) {
     const n = ++this.seeking;
     this.searching = !this.demo && this.filter.trim().length >= SEEK_MIN;
@@ -511,7 +504,7 @@ export default class Recap extends View {
       cx.spawn(async (cx) => {
         const asks = JSON.stringify(list.map(({ pid }) => ({ pid })));
         const said = await tool("herdr-recap", ["search", asks, filter], machine).catch(() => []);
-        // Typed on meanwhile: that filter's search answers for itself.
+        // Typed on meanwhile.
         if (n !== this.seeking) return;
         if (this.foundFor !== filter) (this.found = {}), (this.foundFor = filter);
         const text = new Map(said.map((s) => [s.pid, s.text]));
@@ -522,7 +515,6 @@ export default class Recap extends View {
     }
   }
 
-  // What an agent's conversation says of the filter, if it was found there.
   foundIn(r) {
     return this.foundFor && this.foundFor === this.filter.trim() ? this.found[r.address] ?? null : null;
   }
@@ -673,7 +665,6 @@ export default class Recap extends View {
   // is; else, for one at work with neither yet, what it was asked (its last
   // prompt), or its Linear issue.
   said(r) {
-    // Found by its conversation: what was said there, not the recap.
     if (r.found) return r.found;
     if (r.recap) return r.recap;
     if (r.note) return r.note;
@@ -826,7 +817,6 @@ export default class Recap extends View {
     const o = tones(t);
     const now = Date.now();
     const all = this.rows(now);
-    // A row the filter isn't on is listed when its conversation has it.
     for (const r of all) if (!this.matches(r)) r.found = this.foundIn(r);
     const listed = all.filter((r) => r.found || this.matches(r));
     const order = (r) => STAGES.findIndex((s) => s.id === r.stage);

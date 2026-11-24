@@ -250,14 +250,14 @@ func TestTheAppsModSearchesTheConversationsOfTheProcessesItNames(t *testing.T) {
 	write(t, filepath.Join(projects, other+".jsonl"),
 		`{"type":"user","message":{"role":"user","content":"tidy the README"}}`+"\n")
 	withEnv(t, map[string]string{"CLAUDE_CONFIG_DIR": dir}, nil)
-	// 1 is no Claude process: it's passed over, not an error.
+	// 1 is no Claude process.
 	asks := []sessionAsk{{PID: 4242}, {PID: 4243}, {PID: 1}}
 
 	got := searchAsked(context.Background(), config{}, asks, "142")
 	if len(got) != 1 || got[0].PID != 4242 || !strings.Contains(got[0].Text, "over to ENG-142") {
 		t.Fatalf("found %+v", got)
 	}
-	// What a tool read isn't searched, nor is a filter too short to be worth it.
+	// A tool's output, and a filter too short.
 	for _, filter := range []string{"977", "42"} {
 		if got := searchAsked(context.Background(), config{}, asks, filter); got == nil || len(got) != 0 {
 			t.Errorf("%q found %+v", filter, got)
