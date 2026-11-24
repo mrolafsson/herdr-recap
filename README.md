@@ -32,9 +32,10 @@ in the [herdr](https://herdr.dev) TUI. One install, the same recaps in both.
 - **Full context at a glance.** Each row has the branch, uncommitted and
   unpushed work, task progress, PR state, and how long it has been waiting.
 - **Type to filter** across titles, recaps, branches, stages and workspaces.
-- **Search built in** (TUI). When no row matches, the agents' conversations are
-  searched for what you typed, so you find the agent that said it. Uses
-  Memex to put the best match first, if it's installed.
+- **Search built in.** The agents' conversations are searched for what you
+  typed, so you find the agent that said it: in the TUI when no row matches,
+  in the Herdr app alongside the rows that do. The TUI uses Memex to put the
+  best match first, if it's installed.
 - **Want better titles?** Agents with no title, or a slug for one, get a
   suggested name with their ticket key, applied with one keypress; or name
   them yourself.
@@ -277,6 +278,12 @@ in place of the recap. Every word has to be somewhere in the conversation.
 It's what you and the agent said that is searched, not what its tools read
 or printed, or every agent that opened a file would match that file's
 words. It takes three letters or more, and a moment's pause in the typing.
+
+The Herdr app's Recap searches the conversations whether or not a row
+matches, and lists the agents found that way with the others, in their
+stages: a ticket or a pull request an agent worked on is often in what was
+said and not in its title or branch. The count beside the filter says how
+many are listed by what was said.
 
 ![An agent found by a word from its conversation that no row has, with what was said there in place of its recap](docs/images/search.png)
 
@@ -603,7 +610,8 @@ default summarizer is a new, non-persistent Claude print-mode request and has
 the usual Claude billing or plan cost. Recaps are kept in
 `~/.local/state/herdr/plugins/herdr-recap/recaps/`, readable only by you.
 
-Searching the conversations (when no row matches the filter) reads Claude's,
+Searching the conversations (in the TUI when no row matches the filter, in
+the Herdr app whenever there is one) reads Claude's,
 Codex's and omp's transcripts where they are on your disk, and sends nothing
 anywhere. An agent read through Memex is searched in the same recent page a
 recap of it reads.

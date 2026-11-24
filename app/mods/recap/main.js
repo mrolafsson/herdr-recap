@@ -19,6 +19,9 @@ import { tones, tint, countPill, STAGES, ALL, stageOf, stateIcon, stageColor, ic
 // and issues (which the plugins cache for a minute) less often.
 const REREAD_MS = 5000;
 const LOOKUP_MS = 20000;
+// The conversations are searched once the typing pauses, as the TUI does.
+const SEEK_MIN = 3;
+const SEEK_MS = 300;
 // The list's height at most; the popup's own height caps it too.
 const LIST_MAX = 680;
 
@@ -113,6 +116,11 @@ const CACHE = `${appHome()}/recap-cache.json`;
 export default class Recap extends View {
   init(_props, cx) {
     this.filter = "";
+    // What each agent's conversation says of the filter, by address.
+    this.found = {};
+    this.foundFor = "";
+    this.seeking = 0;
+    this.searching = false;
     this.tab = null;
     this.at = 0;
     // The agent being replied to: its address and name.
@@ -174,6 +182,7 @@ export default class Recap extends View {
     this.input.on("change", (_e, cx) => {
       this.filter = this.input.value();
       this.at = 0;
+      this.seekSoon(cx);
       cx.notify();
     });
     this.input.on("submit", () => this.go(this.shown?.[this.at]));
@@ -458,7 +467,8 @@ export default class Recap extends View {
     });
   }
 
-  askEach(cx, write) {
+  // The Claude agents herdr-recap can be asked about, by machine.
+  claudes() {
     const core = this.core;
     const byMachine = new Map();
     for (const a of agents()) {
@@ -469,7 +479,48 @@ export default class Recap extends View {
       if (!byMachine.has(m)) byMachine.set(m, []);
       byMachine.get(m).push({ a, pid, cwd: t.foreground?.cwd ?? t.cwd });
     }
+    return byMachine;
+  }
+
+  // Searches the conversations for the filter, on each agent's machine.
+  seekSoon(cx) {
+    const n = ++this.seeking;
+    this.searching = !this.demo && this.filter.trim().length >= SEEK_MIN;
+    if (!this.searching) return;
+    cx.timer.after(SEEK_MS, (cx) => {
+      if (n === this.seeking) this.seek(cx, n);
+    });
+  }
+
+  seek(cx, n) {
+    const filter = this.filter.trim();
+    const byMachine = this.core ? this.claudes() : new Map();
+    let left = byMachine.size;
+    if (!left) {
+      this.searching = false;
+      return cx.notify();
+    }
     for (const [machine, list] of byMachine) {
+      cx.spawn(async (cx) => {
+        const asks = JSON.stringify(list.map(({ pid }) => ({ pid })));
+        const said = await tool("herdr-recap", ["search", asks, filter], machine).catch(() => []);
+        // Typed on meanwhile.
+        if (n !== this.seeking) return;
+        if (this.foundFor !== filter) (this.found = {}), (this.foundFor = filter);
+        const text = new Map(said.map((s) => [s.pid, s.text]));
+        for (const { a, pid } of list) if (text.has(pid)) this.found[a.address] = text.get(pid);
+        if (!--left) this.searching = false;
+        cx.notify();
+      });
+    }
+  }
+
+  foundIn(r) {
+    return this.foundFor && this.foundFor === this.filter.trim() ? this.found[r.address] ?? null : null;
+  }
+
+  askEach(cx, write) {
+    for (const [machine, list] of this.claudes()) {
       const args = [JSON.stringify(list.map(({ a, pid, cwd }) => ({ pid, cwd, title: clean(a.title) })))];
       if (write && list.some(({ a }) => a.status !== "working")) args.unshift("--write");
       cx.spawn(async (cx) => {
@@ -614,6 +665,7 @@ export default class Recap extends View {
   // is; else, for one at work with neither yet, what it was asked (its last
   // prompt), or its Linear issue.
   said(r) {
+    if (r.found) return r.found;
     if (r.recap) return r.recap;
     if (r.note) return r.note;
     if (r.info?.last_prompt) return `› ${r.info.last_prompt}`;
@@ -754,7 +806,7 @@ export default class Recap extends View {
                     .child(div().min_w(0).truncate().font_medium().text_color(o.fg).child(r.suggested))
                     .child(words(o, [[["Rename", o.accent, (cx) => this.rename(r, cx)]], [["Ignore", o.dim, (cx) => this.ignore(r, cx)]]], `sg-${r.address}`)),
                 ))
-              .child(div().text_size(13).line_height(1.5).text_color(said && r.recap ? o.muted : o.dim).when(!r.recap, (el) => el.italic()).child(said || "Nothing to recap yet."))
+              .child(div().text_size(13).line_height(1.5).text_color(said && (r.recap || r.found) ? o.muted : o.dim).when(!r.recap && !r.found, (el) => el.italic()).child(said || "Nothing to recap yet."))
               .when(details.length > 0, (el) => el.child(h_flex().gap(6).flex_wrap().items_center().children(details))),
           ),
       );
@@ -765,7 +817,8 @@ export default class Recap extends View {
     const o = tones(t);
     const now = Date.now();
     const all = this.rows(now);
-    const listed = all.filter((r) => this.matches(r));
+    for (const r of all) if (!this.matches(r)) r.found = this.foundIn(r);
+    const listed = all.filter((r) => r.found || this.matches(r));
     const order = (r) => STAGES.findIndex((s) => s.id === r.stage);
     listed.sort((x, y) => order(x) - order(y) || y.since - x.since);
     const count = (id) => (id === "all" ? listed.length : listed.filter((r) => r.stage === id).length);
@@ -844,13 +897,14 @@ export default class Recap extends View {
     const listH = this.shown.length
       ? Math.min(LIST_MAX, headings * 32 + this.shown.reduce((h, r) => h + this.height(r), 0))
       : 44;
-    const empty = this.filter ? "No agent matches." : "No agents yet. Agents started in Herdr show up here, from every machine.";
+    const foundCount = listed.filter((r) => r.found).length;
+    const empty = this.searching ? "No agent matches. Searching the conversations…" : this.filter ? "No agent matches." : "No agents yet. Agents started in Herdr show up here, from every machine.";
     const info = sel?.info ?? {};
     const trouble = Object.values(this.unasked);
     const machineCount = new Set(all.map((r) => r.machine ?? "here")).size;
     const summary = this.demo
       ? "Demo · made-up agents"
-      : `${all.length} agent${all.length === 1 ? "" : "s"}${machineCount > 1 ? ` · ${machineCount} machines` : ""}`;
+      : `${all.length} agent${all.length === 1 ? "" : "s"}${machineCount > 1 ? ` · ${machineCount} machines` : ""}${foundCount ? ` · ${foundCount} by what was said` : ""}`;
     const replying = this.replying;
 
     return v_flex()

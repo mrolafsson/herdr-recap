@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -143,6 +144,55 @@ func runSessions(ctx context.Context, cfg config, args []string) error {
 		}
 	}
 	return json.NewEncoder(os.Stdout).Encode(out)
+}
+
+// sessionFound is an agent whose conversation has the mod's filter.
+type sessionFound struct {
+	PID  int    `json:"pid"`
+	Text string `json:"text"`
+}
+
+// runSearch prints the asked-for agents whose conversations say the filter.
+func runSearch(ctx context.Context, cfg config, args []string) error {
+	if len(args) != 2 {
+		return errors.New(`search needs two arguments: [{"pid": N}, …] and the filter`)
+	}
+	var asks []sessionAsk
+	if err := json.Unmarshal([]byte(args[0]), &asks); err != nil {
+		return fmt.Errorf("search: %w", err)
+	}
+	return json.NewEncoder(os.Stdout).Encode(searchAsked(ctx, cfg, asks, args[1]))
+}
+
+// searchAsked searches each agent's conversation, a few at a time. An agent
+// with no session to read is passed over.
+func searchAsked(ctx context.Context, cfg config, asks []sessionAsk, filter string) []sessionFound {
+	found := make([]sessionFound, 0, len(asks))
+	words := searchWords(filter)
+	if words == nil {
+		return found
+	}
+	texts := make([]string, len(asks))
+	var wg sync.WaitGroup
+	room := make(chan struct{}, 4)
+	for i, a := range asks {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			room <- struct{}{}
+			defer func() { <-room }()
+			if s, err := sessionForPID(a.PID, "claude"); err == nil {
+				texts[i] = searchSession(ctx, cfg, s, words)
+			}
+		}()
+	}
+	wg.Wait()
+	for i, a := range asks {
+		if texts[i] != "" {
+			found = append(found, sessionFound{PID: a.PID, Text: texts[i]})
+		}
+	}
+	return found
 }
 
 // gitPushTarget is where dir's branch pushes: origin's URL, and its

@@ -38,6 +38,10 @@ const usage = `herdr-recap — what each of your agents was doing, in herdr
   title JSON       for the Herdr app's mod: ask for a better title for each Claude
                    process in [{"pid": N, "title": "…"}, …], in the background;
                    it comes with the next sessions
+  search JSON FILTER
+                   for the Herdr app's mod: the Claude processes in [{"pid": N}, …]
+                   whose conversations say every word of FILTER, each with some
+                   of what was said, as JSON
   settle SESSION   the session's suggested title was taken or turned down:
                    don't suggest it again
 `
@@ -94,6 +98,8 @@ func run(ctx context.Context, args []string) error {
 		return runSessions(ctx, cfg, args[1:])
 	case "title":
 		return runTitle(ctx, cfg, args[1:])
+	case "search":
+		return runSearch(ctx, cfg, args[1:])
 	case "settle":
 		if len(args) != 2 || !sessionIDPattern.MatchString(args[1]) {
 			return errors.New("settle needs one session ID")
